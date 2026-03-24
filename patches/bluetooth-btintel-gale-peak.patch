@@ -1,0 +1,41 @@
+--- a/drivers/bluetooth/btintel.c
++++ b/drivers/bluetooth/btintel.c
+@@ -449,6 +449,12 @@
+ 	case 0x17:	/* TyP */
+ 	case 0x18:	/* Slr */
+ 	case 0x19:	/* Slr-F */
++	case 0x1b:	/* Mgr */
++	case 0x1c:	/* GaP */
++	case 0x1d:	/* BzrU */
++	case 0x1e:	/* Bzr */
++	case 0x1f:	/* Scorpious Peak */
++	case 0x22:	/* Future TLV */
+ 		break;
+ 	default:
+ 		bt_dev_err(hdev, "Unsupported Intel hardware variant (0x%x)",
+@@ -2168,6 +2174,12 @@
+ 	case 0x17:
+ 	case 0x18:
+ 	case 0x19:
++	case 0x1b:
++	case 0x1c:
++	case 0x1d:
++	case 0x1e:
++	case 0x1f:
++	case 0x22:
+ 		hci_set_msft_opcode(hdev, 0xFC1E);
+ 		break;
+ 	default:
+@@ -2349,6 +2361,12 @@
+ 	case 0x17:
+ 	case 0x18:
+ 	case 0x19:
++	case 0x1b:
++	case 0x1c:
++	case 0x1d:
++	case 0x1e:
++	case 0x1f:
++	case 0x22:
+ 		/* Display version information of TLV type */
+ 		btintel_version_info_tlv(hdev, &ver_tlv);
+ 

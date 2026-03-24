@@ -1,0 +1,29 @@
+--- a/drivers/bluetooth/btusb.c
++++ b/drivers/bluetooth/btusb.c
+@@ -25,6 +25,16 @@
+ #include "btbcm.h"
+ #include "btrtl.h"
+ 
++/* Intel-focused external build: keep the helper dependency surface small
++ * for Ubuntu 20.04 / 5.15 while enabling 8087:0036.
++ */
++#undef CONFIG_BT_HCIBTUSB_BCM
++#undef CONFIG_BT_HCIBTUSB_BCM_MODULE
++#undef CONFIG_BT_HCIBTUSB_RTL
++#undef CONFIG_BT_HCIBTUSB_RTL_MODULE
++#undef CONFIG_BT_HCIBTUSB_MTK
++#undef CONFIG_BT_HCIBTUSB_MTK_MODULE
++
+ #define VERSION "0.8"
+ 
+ static bool disable_scofix;
+@@ -62,6 +72,9 @@
+ #define BTUSB_INTEL_BROKEN_INITIAL_NCMD 0x4000000
+ 
+ static const struct usb_device_id btusb_table[] = {
++	/* Intel Bluetooth controller */
++	{ USB_DEVICE(0x8087, 0x0036), .driver_info = BTUSB_INTEL_COMBINED },
++
+ 	/* Generic Bluetooth USB device */
+ 	{ USB_DEVICE_INFO(0xe0, 0x01, 0x01) },
+ 
