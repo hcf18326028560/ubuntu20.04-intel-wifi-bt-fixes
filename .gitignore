@@ -1,9 +1,8 @@
+bluetooth-module/.*
 bluetooth-module/*.o
 bluetooth-module/*.ko
 bluetooth-module/*.mod
 bluetooth-module/*.mod.c
 bluetooth-module/*.mod.o
-bluetooth-module/.*.cmd
-bluetooth-module/*.symvers
 bluetooth-module/Module.symvers
 bluetooth-module/modules.order

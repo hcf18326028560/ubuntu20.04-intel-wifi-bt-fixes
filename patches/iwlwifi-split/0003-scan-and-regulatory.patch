@@ -1,0 +1,948 @@
+diff --git a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/fw/api/nvm-reg.h b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/fw/api/nvm-reg.h
+index 91bfde6..909d05f 100644
+--- a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/fw/api/nvm-reg.h
++++ b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/fw/api/nvm-reg.h
+@@ -317,7 +317,7 @@ struct iwl_mcc_update_resp_v3 {
+ } __packed; /* LAR_UPDATE_MCC_CMD_RESP_S_VER_3 */
+ 
+ /**
+- * struct iwl_mcc_update_resp - response to MCC_UPDATE_CMD.
++ * struct iwl_mcc_update_resp_v4 - response to MCC_UPDATE_CMD.
+  * Contains the new channel control profile map, if changed, and the new MCC
+  * (mobile country code).
+  * The new MCC may be different than what was requested in MCC_UPDATE_CMD.
+@@ -333,7 +333,7 @@ struct iwl_mcc_update_resp_v3 {
+  * @channels: channel control data map, DWORD for each channel. Only the first
+  *	16bits are used.
+  */
+-struct iwl_mcc_update_resp {
++struct iwl_mcc_update_resp_v4 {
+ 	__le32 status;
+ 	__le16 mcc;
+ 	__le16 cap;
+@@ -345,6 +345,37 @@ struct iwl_mcc_update_resp {
+ 	__le32 channels[];
+ } __packed; /* LAR_UPDATE_MCC_CMD_RESP_S_VER_4 */
+ 
++/**
++ * struct iwl_mcc_update_resp_v8 - response to MCC_UPDATE_CMD.
++ * Contains the new channel control profile map, if changed, and the new MCC
++ * (mobile country code).
++ * The new MCC may be different than what was requested in MCC_UPDATE_CMD.
++ * @status: see &enum iwl_mcc_update_status
++ * @mcc: the new applied MCC
++ * @padding: padding for alignment.
++ * @cap: capabilities for all channels which matches the MCC
++ * @time: time elapsed from the MCC test start (in units of 30 seconds)
++ * @geo_info: geographic specific profile information
++ *	see &enum iwl_geo_information.
++ * @source_id: the MCC source, see iwl_mcc_source
++ * @reserved: for four bytes alignment.
++ * @n_channels: number of channels in @channels_data.
++ * @channels: channel control data map, DWORD for each channel. Only the first
++ *	16bits are used.
++ */
++struct iwl_mcc_update_resp_v8 {
++	__le32 status;
++	__le16 mcc;
++	u8 padding[2];
++	__le32 cap;
++	__le16 time;
++	__le16 geo_info;
++	u8 source_id;
++	u8 reserved[3];
++	__le32 n_channels;
++	__le32 channels[];
++} __packed; /* LAR_UPDATE_MCC_CMD_RESP_S_VER_8 */
++
+ /**
+  * struct iwl_mcc_chub_notif - chub notifies of mcc change
+  * (MCC_CHUB_UPDATE_CMD = 0xc9)
+@@ -564,6 +595,54 @@ struct iwl_lari_config_change_cmd_v6 {
+ 	__le32 force_disable_channels_bitmap;
+ } __packed; /* LARI_CHANGE_CONF_CMD_S_VER_6 */
+ 
++/**
++ * struct iwl_lari_config_change_cmd_v8 - change LARI configuration
++ * @config_bitmap: Bitmap of the config commands. Each bit will trigger a
++ *     different predefined FW config operation.
++ * @oem_uhb_allow_bitmap: Bitmap of UHB enabled MCC sets.
++ * @oem_11ax_allow_bitmap: Bitmap of 11ax allowed MCCs.
++ * @oem_unii4_allow_bitmap: Bitmap of unii4 allowed MCCs.
++ * @chan_state_active_bitmap: Bitmap to enable different bands per country
++ *     or region.
++ * @force_disable_channels_bitmap: Bitmap of disabled bands/channels.
++ * @edt_bitmap: Bitmap of energy detection threshold table.
++ */
++struct iwl_lari_config_change_cmd_v8 {
++	__le32 config_bitmap;
++	__le32 oem_uhb_allow_bitmap;
++	__le32 oem_11ax_allow_bitmap;
++	__le32 oem_unii4_allow_bitmap;
++	__le32 chan_state_active_bitmap;
++	__le32 force_disable_channels_bitmap;
++	__le32 edt_bitmap;
++} __packed; /* LARI_CHANGE_CONF_CMD_S_VER_8 */
++
++/**
++ * struct iwl_lari_config_change_cmd_v12 - change LARI configuration
++ * @config_bitmap: Bitmap of the config commands. Each bit will trigger a
++ *     different predefined FW config operation.
++ * @oem_uhb_allow_bitmap: Bitmap of UHB enabled MCC sets.
++ * @oem_11ax_allow_bitmap: Bitmap of 11ax allowed MCCs.
++ * @oem_unii4_allow_bitmap: Bitmap of unii4 allowed MCCs.
++ * @chan_state_active_bitmap: Bitmap to enable different bands per country
++ *     or region.
++ * @force_disable_channels_bitmap: Bitmap of disabled bands/channels.
++ * @edt_bitmap: Bitmap of energy detection threshold table.
++ * @oem_320mhz_allow_bitmap: 320MHz bandwidth enablement bitmap per MCC.
++ * @oem_11be_allow_bitmap: Bitmap of 11be allowed MCCs.
++ */
++struct iwl_lari_config_change_cmd_v12 {
++	__le32 config_bitmap;
++	__le32 oem_uhb_allow_bitmap;
++	__le32 oem_11ax_allow_bitmap;
++	__le32 oem_unii4_allow_bitmap;
++	__le32 chan_state_active_bitmap;
++	__le32 force_disable_channels_bitmap;
++	__le32 edt_bitmap;
++	__le32 oem_320mhz_allow_bitmap;
++	__le32 oem_11be_allow_bitmap;
++} __packed; /* LARI_CHANGE_CONF_CMD_S_VER_12 */
++
+ /**
+  * struct iwl_pnvm_init_complete_ntfy - PNVM initialization complete
+  * @status: PNVM image loading status
+diff --git a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/fw/api/scan.h b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/fw/api/scan.h
+index 8a68b84..a9a4f5b 100644
+--- a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/fw/api/scan.h
++++ b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/fw/api/scan.h
+@@ -723,31 +723,45 @@ enum iwl_umac_scan_general_params_flags2 {
+  * struct iwl_scan_channel_cfg_umac
+  * @flags:		bitmap - 0-19:	directed scan to i'th ssid.
+  * @channel_num:	channel number 1-13 etc.
+- * @band:		band of channel: 0 for 2GHz, 1 for 5GHz
+- * @iter_count:		repetition count for the channel.
+- * @iter_interval:	interval between two scan iterations on one channel.
++ * @v1:		command version 1
++ * @v1.iter_count:	repetition count for the channel.
++ * @v1.iter_interval:	interval between two scan iterations on one channel.
++ * @v2:		command versions 2-4
++ * @v2.band:		band of channel: 0 for 2GHz, 1 for 5GHz
++ * @v2.iter_count:	repetition count for the channel.
++ * @v2.iter_interval:	interval between two scan iterations on one channel.
++ * @v5:		command versions 5 and up
++ * @v5.psd_20:	highest PSD value known for this channel.
++ * @v5.iter_count:	repetition count for the channel.
++ * @v5.iter_interval:	interval between two scan iterations on one channel.
+  */
+ struct  iwl_scan_channel_cfg_umac {
++#define IWL_CHAN_CFG_FLAGS_BAND_POS 30
+ 	__le32 flags;
+-	/* Both versions are of the same size, so use a union without adjusting
++	u8 channel_num;
++
++	/* All versions are of the same size, so use a union without adjusting
+ 	 * the command size later
+ 	 */
+ 	union {
+ 		struct {
+-			u8 channel_num;
+ 			u8 iter_count;
+ 			__le16 iter_interval;
+-		} v1;  /* SCAN_CHANNEL_CONFIG_API_S_VER_1 */
++		} __packed v1;  /* SCAN_CHANNEL_CONFIG_API_S_VER_1 */
+ 		struct {
+-			u8 channel_num;
+ 			u8 band;
+ 			u8 iter_count;
+ 			u8 iter_interval;
+-		 } v2; /* SCAN_CHANNEL_CONFIG_API_S_VER_2
+-			* SCAN_CHANNEL_CONFIG_API_S_VER_3
+-			* SCAN_CHANNEL_CONFIG_API_S_VER_4
+-			*/
+-	};
++		} __packed v2; /* SCAN_CHANNEL_CONFIG_API_S_VER_2
++				* SCAN_CHANNEL_CONFIG_API_S_VER_3
++				* SCAN_CHANNEL_CONFIG_API_S_VER_4
++				*/
++		struct {
++			u8 psd_20;
++			u8 iter_count;
++			u8 iter_interval;
++		} __packed v5;  /* SCAN_CHANNEL_CONFIG_API_S_VER_5 */
++	} __packed;
+ } __packed;
+ 
+ /**
+@@ -1000,6 +1014,24 @@ struct iwl_scan_channel_params_v6 {
+ 	struct iwl_scan_channel_cfg_umac channel_config[SCAN_MAX_NUM_CHANS_V3];
+ } __packed; /* SCAN_CHANNEL_PARAMS_API_S_VER_6 */
+ 
++/**
++ * struct iwl_scan_channel_params_v7
++ * @flags: channel flags &enum iwl_scan_channel_flags
++ * @count: num of channels in scan request
++ * @n_aps_override: override the number of APs the FW uses to calculate dwell
++ *	time when adaptive dwell is used.
++ *	Channel k will use n_aps_override[i] when BIT(20 + i) is set in
++ *	channel_config[k].flags
++ * @channel_config: array of explicit channel configurations
++ *                  for 2.4Ghz and 5.2Ghz bands
++ */
++struct iwl_scan_channel_params_v7 {
++	u8 flags;
++	u8 count;
++	u8 n_aps_override[2];
++	struct iwl_scan_channel_cfg_umac channel_config[SCAN_MAX_NUM_CHANS_V3];
++} __packed; /* SCAN_CHANNEL_PARAMS_API_S_VER_7 */
++
+ /**
+  * struct iwl_scan_general_params_v11
+  * @flags: &enum iwl_umac_scan_general_flags_v2
+@@ -1081,6 +1113,20 @@ struct iwl_scan_req_params_v15 {
+ 	struct iwl_scan_probe_params_v4 probe_params;
+ } __packed; /* SCAN_REQUEST_PARAMS_API_S_VER_15 and *_VER_14 */
+ 
++/**
++ * struct iwl_scan_req_params_v17
++ * @general_params: &struct iwl_scan_general_params_v11
++ * @channel_params: &struct iwl_scan_channel_params_v7
++ * @periodic_params: &struct iwl_scan_periodic_parms_v1
++ * @probe_params: &struct iwl_scan_probe_params_v4
++ */
++struct iwl_scan_req_params_v17 {
++	struct iwl_scan_general_params_v11 general_params;
++	struct iwl_scan_channel_params_v7 channel_params;
++	struct iwl_scan_periodic_parms_v1 periodic_params;
++	struct iwl_scan_probe_params_v4 probe_params;
++} __packed; /* SCAN_REQUEST_PARAMS_API_S_VER_17 - 14 */
++
+ /**
+  * struct iwl_scan_req_umac_v12
+  * @uid: scan id, &enum iwl_umac_scan_uid_offsets
+@@ -1105,6 +1151,18 @@ struct iwl_scan_req_umac_v15 {
+ 	struct iwl_scan_req_params_v15 scan_params;
+ } __packed; /* SCAN_REQUEST_CMD_UMAC_API_S_VER_15 and *_VER_14 */
+ 
++/**
++ * struct iwl_scan_req_umac_v17
++ * @uid: scan id, &enum iwl_umac_scan_uid_offsets
++ * @ooc_priority: out of channel priority - &enum iwl_scan_priority
++ * @scan_params: scan parameters
++ */
++struct iwl_scan_req_umac_v17 {
++	__le32 uid;
++	__le32 ooc_priority;
++	struct iwl_scan_req_params_v17 scan_params;
++} __packed; /* SCAN_REQUEST_CMD_UMAC_API_S_VER_17 - 14 */
++
+ /**
+  * struct iwl_umac_scan_abort
+  * @uid: scan id, &enum iwl_umac_scan_uid_offsets
+diff --git a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/iwl-nvm-parse.c b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/iwl-nvm-parse.c
+index d24da26..59572e3 100644
+--- a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/iwl-nvm-parse.c
++++ b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/iwl-nvm-parse.c
+@@ -232,12 +232,31 @@ enum iwl_reg_capa_flags_v2 {
+ 	REG_CAPA_V2_11AX_DISABLED	= BIT(10),
+ };
+ 
++/**
++ * enum iwl_reg_capa_flags_v4 - global flags applied for the whole regulatory
++ * domain (version 4).
++ * @REG_CAPA_V4_160MHZ_ALLOWED: 160 MHz channels are allowed.
++ * @REG_CAPA_V4_80MHZ_ALLOWED: 80 MHz channels are allowed.
++ * @REG_CAPA_V4_11AX_DISABLED: 11ax is forbidden for this regulatory domain.
++ */
++enum iwl_reg_capa_flags_v4 {
++	REG_CAPA_V4_160MHZ_ALLOWED	= BIT(3),
++	REG_CAPA_V4_80MHZ_ALLOWED	= BIT(4),
++	REG_CAPA_V4_11AX_DISABLED	= BIT(13),
++};
++
+ /*
+ * API v2 for reg_capa_flags is relevant from version 6 and onwards of the
+ * MCC update command response.
+ */
+ #define REG_CAPA_V2_RESP_VER	6
+ 
++/*
++ * API v4 for reg_capa_flags is relevant from version 8 and onwards of the
++ * MCC update command response.
++ */
++#define REG_CAPA_V4_RESP_VER	8
++
+ /**
+  * struct iwl_reg_capa - struct for global regulatory capabilities, Used for
+  * handling the different APIs of reg_capa_flags.
+@@ -1762,11 +1781,17 @@ static u32 iwl_nvm_get_regdom_bw_flags(const u16 *nvm_chan,
+ 	return flags;
+ }
+ 
+-static struct iwl_reg_capa iwl_get_reg_capa(u16 flags, u8 resp_ver)
++static struct iwl_reg_capa iwl_get_reg_capa(u32 flags, u8 resp_ver)
+ {
+-	struct iwl_reg_capa reg_capa;
+-
+-	if (resp_ver >= REG_CAPA_V2_RESP_VER) {
++	struct iwl_reg_capa reg_capa = {};
++
++	if (resp_ver >= REG_CAPA_V4_RESP_VER) {
++		/* v8 MCC responses moved 40 MHz out of the cap bitmap. */
++		reg_capa.allow_40mhz = true;
++		reg_capa.allow_80mhz = flags & REG_CAPA_V4_80MHZ_ALLOWED;
++		reg_capa.allow_160mhz = flags & REG_CAPA_V4_160MHZ_ALLOWED;
++		reg_capa.disable_11ax = flags & REG_CAPA_V4_11AX_DISABLED;
++	} else if (resp_ver >= REG_CAPA_V2_RESP_VER) {
+ 		reg_capa.allow_40mhz = flags & REG_CAPA_V2_40MHZ_ALLOWED;
+ 		reg_capa.allow_80mhz = flags & REG_CAPA_V2_80MHZ_ALLOWED;
+ 		reg_capa.allow_160mhz = flags & REG_CAPA_V2_160MHZ_ALLOWED;
+@@ -1783,7 +1808,7 @@ static struct iwl_reg_capa iwl_get_reg_capa(u16 flags, u8 resp_ver)
+ struct ieee80211_regdomain *
+ iwl_parse_nvm_mcc_info(struct device *dev, const struct iwl_cfg *cfg,
+ 		       int num_of_ch, __le32 *channels, u16 fw_mcc,
+-		       u16 geo_info, u16 cap, u8 resp_ver)
++		       u16 geo_info, u32 cap, u8 resp_ver)
+ {
+ 	int ch_idx;
+ 	u16 ch_flags;
+diff --git a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/iwl-nvm-parse.h b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/iwl-nvm-parse.h
+index e01f775..1560c3a 100644
+--- a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/iwl-nvm-parse.h
++++ b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/iwl-nvm-parse.h
+@@ -50,7 +50,7 @@ iwl_parse_nvm_data(struct iwl_trans *trans, const struct iwl_cfg *cfg,
+ struct ieee80211_regdomain *
+ iwl_parse_nvm_mcc_info(struct device *dev, const struct iwl_cfg *cfg,
+ 		       int num_of_ch, __le32 *channels, u16 fw_mcc,
+-		       u16 geo_info, u16 cap, u8 resp_ver);
++		       u16 geo_info, u32 cap, u8 resp_ver);
+ 
+ /**
+  * struct iwl_nvm_section - describes an NVM section in memory.
+diff --git a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/nvm.c b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/nvm.c
+index 7c73caf..a3af898 100644
+--- a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/nvm.c
++++ b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/nvm.c
+@@ -404,7 +404,7 @@ int iwl_nvm_init(struct iwl_mvm *mvm)
+ 	return ret < 0 ? ret : 0;
+ }
+ 
+-struct iwl_mcc_update_resp *
++struct iwl_mcc_update_resp_v8 *
+ iwl_mvm_update_mcc(struct iwl_mvm *mvm, const char *alpha2,
+ 		   enum iwl_mcc_source src_id)
+ {
+@@ -412,7 +412,7 @@ iwl_mvm_update_mcc(struct iwl_mvm *mvm, const char *alpha2,
+ 		.mcc = cpu_to_le16(alpha2[0] << 8 | alpha2[1]),
+ 		.source_id = (u8)src_id,
+ 	};
+-	struct iwl_mcc_update_resp *resp_cp;
++	struct iwl_mcc_update_resp_v8 *resp_cp;
+ 	struct iwl_rx_packet *pkt;
+ 	struct iwl_host_cmd cmd = {
+ 		.id = MCC_UPDATE_CMD,
+@@ -424,6 +424,7 @@ iwl_mvm_update_mcc(struct iwl_mvm *mvm, const char *alpha2,
+ 	u32 status;
+ 	int resp_len, n_channels;
+ 	u16 mcc;
++	u8 resp_ver;
+ 
+ 	if (WARN_ON_ONCE(!iwl_mvm_is_lar_supported(mvm)))
+ 		return ERR_PTR(-EOPNOTSUPP);
+@@ -445,26 +446,69 @@ iwl_mvm_update_mcc(struct iwl_mvm *mvm, const char *alpha2,
+ 		return ERR_PTR(ret);
+ 
+ 	pkt = cmd.resp_pkt;
++	resp_ver = iwl_fw_lookup_notif_ver(mvm->fw, IWL_ALWAYS_LONG_GROUP,
++				   MCC_UPDATE_CMD, 0);
+ 
+ 	/* Extract MCC response */
+-	if (fw_has_capa(&mvm->fw->ucode_capa,
+-			IWL_UCODE_TLV_CAPA_MCC_UPDATE_11AX_SUPPORT)) {
+-		struct iwl_mcc_update_resp *mcc_resp = (void *)pkt->data;
+-
+-		n_channels =  __le32_to_cpu(mcc_resp->n_channels);
+-		resp_len = sizeof(struct iwl_mcc_update_resp) +
+-			   n_channels * sizeof(__le32);
+-		resp_cp = kmemdup(mcc_resp, resp_len, GFP_KERNEL);
++	if (resp_ver >= 8) {
++		struct iwl_mcc_update_resp_v8 *mcc_resp_v8 = (void *)pkt->data;
++
++		n_channels = __le32_to_cpu(mcc_resp_v8->n_channels);
++		if (iwl_rx_packet_payload_len(pkt) !=
++		    struct_size(mcc_resp_v8, channels, n_channels)) {
++			resp_cp = ERR_PTR(-EINVAL);
++			goto exit;
++		}
++		resp_len = struct_size(resp_cp, channels, n_channels);
++		resp_cp = kzalloc(resp_len, GFP_KERNEL);
+ 		if (!resp_cp) {
+ 			resp_cp = ERR_PTR(-ENOMEM);
+ 			goto exit;
+ 		}
++		resp_cp->status = mcc_resp_v8->status;
++		resp_cp->mcc = mcc_resp_v8->mcc;
++		resp_cp->cap = mcc_resp_v8->cap;
++		resp_cp->source_id = mcc_resp_v8->source_id;
++		resp_cp->time = mcc_resp_v8->time;
++		resp_cp->geo_info = mcc_resp_v8->geo_info;
++		resp_cp->n_channels = mcc_resp_v8->n_channels;
++		memcpy(resp_cp->channels, mcc_resp_v8->channels,
++		       n_channels * sizeof(__le32));
++	} else if (fw_has_capa(&mvm->fw->ucode_capa,
++			       IWL_UCODE_TLV_CAPA_MCC_UPDATE_11AX_SUPPORT)) {
++		struct iwl_mcc_update_resp_v4 *mcc_resp_v4 = (void *)pkt->data;
++
++		n_channels = __le32_to_cpu(mcc_resp_v4->n_channels);
++		if (iwl_rx_packet_payload_len(pkt) !=
++		    struct_size(mcc_resp_v4, channels, n_channels)) {
++			resp_cp = ERR_PTR(-EINVAL);
++			goto exit;
++		}
++		resp_len = struct_size(resp_cp, channels, n_channels);
++		resp_cp = kzalloc(resp_len, GFP_KERNEL);
++		if (!resp_cp) {
++			resp_cp = ERR_PTR(-ENOMEM);
++			goto exit;
++		}
++		resp_cp->status = mcc_resp_v4->status;
++		resp_cp->mcc = mcc_resp_v4->mcc;
++		resp_cp->cap = cpu_to_le32(le16_to_cpu(mcc_resp_v4->cap));
++		resp_cp->source_id = mcc_resp_v4->source_id;
++		resp_cp->time = mcc_resp_v4->time;
++		resp_cp->geo_info = mcc_resp_v4->geo_info;
++		resp_cp->n_channels = mcc_resp_v4->n_channels;
++		memcpy(resp_cp->channels, mcc_resp_v4->channels,
++		       n_channels * sizeof(__le32));
+ 	} else {
+ 		struct iwl_mcc_update_resp_v3 *mcc_resp_v3 = (void *)pkt->data;
+ 
+-		n_channels =  __le32_to_cpu(mcc_resp_v3->n_channels);
+-		resp_len = sizeof(struct iwl_mcc_update_resp) +
+-			   n_channels * sizeof(__le32);
++		n_channels = __le32_to_cpu(mcc_resp_v3->n_channels);
++		if (iwl_rx_packet_payload_len(pkt) !=
++		    struct_size(mcc_resp_v3, channels, n_channels)) {
++			resp_cp = ERR_PTR(-EINVAL);
++			goto exit;
++		}
++		resp_len = struct_size(resp_cp, channels, n_channels);
+ 		resp_cp = kzalloc(resp_len, GFP_KERNEL);
+ 		if (!resp_cp) {
+ 			resp_cp = ERR_PTR(-ENOMEM);
+@@ -473,7 +517,7 @@ iwl_mvm_update_mcc(struct iwl_mvm *mvm, const char *alpha2,
+ 
+ 		resp_cp->status = mcc_resp_v3->status;
+ 		resp_cp->mcc = mcc_resp_v3->mcc;
+-		resp_cp->cap = cpu_to_le16(mcc_resp_v3->cap);
++		resp_cp->cap = cpu_to_le32(mcc_resp_v3->cap);
+ 		resp_cp->source_id = mcc_resp_v3->source_id;
+ 		resp_cp->time = mcc_resp_v3->time;
+ 		resp_cp->geo_info = mcc_resp_v3->geo_info;
+diff --git a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/scan.c b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/scan.c
+index 27e90ba..1a14862 100644
+--- a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/scan.c
++++ b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/scan.c
+@@ -645,7 +645,7 @@ static void iwl_mvm_scan_fill_tx_cmd(struct iwl_mvm *mvm,
+ 							   NL80211_BAND_2GHZ,
+ 							   no_cck);
+ 
+-	if (iwl_fw_lookup_cmd_ver(mvm->fw, ADD_STA, 0) < 12) {
++	if (!iwl_mvm_has_new_station_api(mvm->fw)) {
+ 		tx_cmd[0].sta_id = mvm->aux_sta.sta_id;
+ 		tx_cmd[1].sta_id = mvm->aux_sta.sta_id;
+ 
+@@ -724,6 +724,10 @@ static u8 *iwl_mvm_copy_and_insert_ds_elem(struct iwl_mvm *mvm, const u8 *ies,
+ 
+ #define WFA_TPC_IE_LEN	9
+ 
++#ifndef IEEE80211_RNR_TBTT_PARAMS_PSD_RESERVED
++#define IEEE80211_RNR_TBTT_PARAMS_PSD_RESERVED 0x7f
++#endif
++
+ static void iwl_mvm_add_tpc_report_ie(u8 *pos)
+ {
+ 	pos[0] = WLAN_EID_VENDOR_SPECIFIC;
+@@ -1081,8 +1085,8 @@ static void iwl_mvm_fill_scan_config_v1(struct iwl_mvm *mvm, void *config,
+ 
+ 	memcpy(&cfg->mac_addr, &mvm->addresses[0].addr, ETH_ALEN);
+ 
+-	/* This function should not be called when using ADD_STA ver >=12 */
+-	WARN_ON_ONCE(iwl_fw_lookup_cmd_ver(mvm->fw, ADD_STA, 0) >= 12);
++	/* This function should not be called when using new station API */
++	WARN_ON_ONCE(iwl_mvm_has_new_station_api(mvm->fw));
+ 
+ 	cfg->bcast_sta_id = mvm->aux_sta.sta_id;
+ 	cfg->channel_flags = channel_flags;
+@@ -1132,8 +1136,8 @@ static void iwl_mvm_fill_scan_config_v2(struct iwl_mvm *mvm, void *config,
+ 
+ 	memcpy(&cfg->mac_addr, &mvm->addresses[0].addr, ETH_ALEN);
+ 
+-	/* This function should not be called when using ADD_STA ver >=12 */
+-	WARN_ON_ONCE(iwl_fw_lookup_cmd_ver(mvm->fw, ADD_STA, 0) >= 12);
++	/* This function should not be called when using new station API */
++	WARN_ON_ONCE(iwl_mvm_has_new_station_api(mvm->fw));
+ 
+ 	cfg->bcast_sta_id = mvm->aux_sta.sta_id;
+ 	cfg->channel_flags = channel_flags;
+@@ -1248,7 +1252,7 @@ int iwl_mvm_config_scan(struct iwl_mvm *mvm)
+ 
+ 	memset(&cfg, 0, sizeof(cfg));
+ 
+-	if (iwl_fw_lookup_cmd_ver(mvm->fw, ADD_STA, 0) < 12) {
++	if (!iwl_mvm_has_new_station_api(mvm->fw)) {
+ 		cfg.bcast_sta_id = mvm->aux_sta.sta_id;
+ 	} else if (iwl_fw_lookup_cmd_ver(mvm->fw, SCAN_CFG_CMD, 0) < 5) {
+ 		/*
+@@ -1580,7 +1584,7 @@ iwl_mvm_umac_scan_cfg_channels(struct iwl_mvm *mvm,
+ 
+ 	for (i = 0; i < n_channels; i++) {
+ 		channel_cfg[i].flags = cpu_to_le32(flags);
+-		channel_cfg[i].v1.channel_num = channels[i]->hw_value;
++		channel_cfg[i].channel_num = channels[i]->hw_value;
+ 		if (iwl_mvm_is_scan_ext_chan_supported(mvm)) {
+ 			enum nl80211_band band = channels[i]->band;
+ 
+@@ -1612,13 +1616,13 @@ iwl_mvm_umac_scan_cfg_channels_v4(struct iwl_mvm *mvm,
+ 			&cp->channel_config[i];
+ 
+ 		cfg->flags = cpu_to_le32(flags);
+-		cfg->v2.channel_num = channels[i]->hw_value;
++		cfg->channel_num = channels[i]->hw_value;
+ 		cfg->v2.band = iwl_mvm_phy_band_from_nl80211(band);
+ 		cfg->v2.iter_count = 1;
+ 		cfg->v2.iter_interval = 0;
+ 
+ 		iwl_mvm_scan_ch_add_n_aps_override(vif_type,
+-						   cfg->v2.channel_num,
++						   cfg->channel_num,
+ 						   cfg->v2.band, bitmap,
+ 						   bitmap_n_entries);
+ 	}
+@@ -1638,13 +1642,13 @@ iwl_mvm_umac_scan_cfg_channels_v6(struct iwl_mvm *mvm,
+ 		struct iwl_scan_channel_cfg_umac *cfg = &cp->channel_config[i];
+ 		u32 n_aps_flag =
+ 			iwl_mvm_scan_ch_n_aps_flag(vif_type,
+-						   channels[i]->hw_value);
++					   channels[i]->hw_value);
+ 
+ 		if (IWL_MVM_ADAPTIVE_DWELL_NUM_APS_OVERRIDE)
+ 			n_aps_flag = IWL_SCAN_ADWELL_N_APS_GO_FRIENDLY_BIT;
+ 
+ 		cfg->flags = cpu_to_le32(flags | n_aps_flag);
+-		cfg->v2.channel_num = channels[i]->hw_value;
++		cfg->channel_num = channels[i]->hw_value;
+ 		cfg->v2.band = iwl_mvm_phy_band_from_nl80211(band);
+ 		if (cfg80211_channel_is_psc(channels[i]))
+ 			cfg->flags = 0;
+@@ -1653,6 +1657,45 @@ iwl_mvm_umac_scan_cfg_channels_v6(struct iwl_mvm *mvm,
+ 	}
+ }
+ 
++static void
++iwl_mvm_umac_scan_cfg_channels_v7(struct iwl_mvm *mvm,
++				  struct ieee80211_channel **channels,
++				  struct iwl_scan_channel_params_v7 *cp,
++				  int n_channels, u32 flags,
++				  enum nl80211_iftype vif_type,
++				  u32 version)
++{
++	int i;
++
++	for (i = 0; i < n_channels; i++) {
++		enum nl80211_band band = channels[i]->band;
++		struct iwl_scan_channel_cfg_umac *cfg = &cp->channel_config[i];
++		u32 n_aps_flag =
++			iwl_mvm_scan_ch_n_aps_flag(vif_type,
++					   channels[i]->hw_value);
++		u8 iwl_band = iwl_mvm_phy_band_from_nl80211(band);
++
++		if (IWL_MVM_ADAPTIVE_DWELL_NUM_APS_OVERRIDE)
++			n_aps_flag = IWL_SCAN_ADWELL_N_APS_GO_FRIENDLY_BIT;
++
++		cfg->flags = cpu_to_le32(flags | n_aps_flag);
++		cfg->channel_num = channels[i]->hw_value;
++		if (cfg80211_channel_is_psc(channels[i]))
++			cfg->flags = 0;
++
++		if (band == NL80211_BAND_6GHZ)
++			cfg->flags = cpu_to_le32(IWL_UHB_CHAN_CFG_FLAG_FORCE_PASSIVE);
++
++		cfg->v5.iter_count = 1;
++		cfg->v5.iter_interval = 0;
++		if (version < 17)
++			cfg->v2.band = iwl_band;
++		else
++			cfg->flags |= cpu_to_le32(iwl_band <<
++					   IWL_CHAN_CFG_FLAGS_BAND_POS);
++	}
++}
++
+ static void
+ iwl_mvm_umac_scan_fill_6g_chan_list(struct iwl_mvm *mvm,
+ 				    struct iwl_mvm_scan_params *params,
+@@ -1724,14 +1767,15 @@ iwl_mvm_umac_scan_fill_6g_chan_list(struct iwl_mvm *mvm,
+ 	pp->bssid_num = idex_b;
+ }
+ 
+-/* TODO: this function can be merged with iwl_mvm_scan_umac_fill_ch_p_v6 */
++/* TODO: this function can be merged with iwl_mvm_scan_umac_fill_ch_p_v7 */
+ static u32
+-iwl_mvm_umac_scan_cfg_channels_v6_6g(struct iwl_mvm *mvm,
++iwl_mvm_umac_scan_cfg_channels_v7_6g(struct iwl_mvm *mvm,
+ 				     struct iwl_mvm_scan_params *params,
+ 				     u32 n_channels,
+ 				     struct iwl_scan_probe_params_v4 *pp,
+-				     struct iwl_scan_channel_params_v6 *cp,
+-				     enum nl80211_iftype vif_type)
++				     struct iwl_scan_channel_params_v7 *cp,
++				     enum nl80211_iftype vif_type,
++				     u32 version)
+ {
+ 	int i;
+ 	struct cfg80211_scan_6ghz_params *scan_6ghz_params =
+@@ -1747,27 +1791,20 @@ iwl_mvm_umac_scan_cfg_channels_v6_6g(struct iwl_mvm *mvm,
+ 		bool force_passive, found = false, allow_passive = true,
+ 		     unsolicited_probe_on_chan = false, psc_no_listen = false;
+ 
+-		/*
+-		 * Avoid performing passive scan on non PSC channels unless the
+-		 * scan is specifically a passive scan, i.e., no SSIDs
+-		 * configured in the scan command.
+-		 */
+ 		if (!cfg80211_channel_is_psc(params->channels[i]) &&
+ 		    !params->n_6ghz_params && params->n_ssids)
+ 			continue;
+ 
+-		cfg->v1.channel_num = params->channels[i]->hw_value;
+-		cfg->v2.band = 2;
+-		cfg->v2.iter_count = 1;
+-		cfg->v2.iter_interval = 0;
++		cfg->channel_num = params->channels[i]->hw_value;
++		if (version < 17)
++			cfg->v2.band = PHY_BAND_6;
++		else
++			cfg->flags |= cpu_to_le32(PHY_BAND_6 <<
++					   IWL_CHAN_CFG_FLAGS_BAND_POS);
++		cfg->v5.psd_20 = IEEE80211_RNR_TBTT_PARAMS_PSD_RESERVED;
++		cfg->v5.iter_count = 1;
++		cfg->v5.iter_interval = 0;
+ 
+-		/*
+-		 * The optimize the scan time, i.e., reduce the scan dwell time
+-		 * on each channel, the below logic tries to set 3 direct BSSID
+-		 * probe requests for each broadcast probe request with a short
+-		 * SSID.
+-		 * TODO: improve this logic
+-		 */
+ 		n_used_bssid_entries = 3;
+ 		for (j = 0; j < params->n_6ghz_params; j++) {
+ 			if (!(scan_6ghz_params[j].channel_idx == i))
+@@ -1782,19 +1819,11 @@ iwl_mvm_umac_scan_cfg_channels_v6_6g(struct iwl_mvm *mvm,
+ 				if (!scan_6ghz_params[j].unsolicited_probe &&
+ 				    le32_to_cpu(pp->short_ssid[k]) ==
+ 				    scan_6ghz_params[j].short_ssid) {
+-					/* Relevant short SSID bit set */
+ 					if (s_ssid_bitmap & BIT(k)) {
+ 						found = true;
+ 						break;
+ 					}
+ 
+-					/*
+-					 * Use short SSID only to create a new
+-					 * iteration during channel dwell or in
+-					 * case that the short SSID has a
+-					 * matching SSID, i.e., scan for hidden
+-					 * APs.
+-					 */
+ 					if (n_used_bssid_entries >= 3) {
+ 						s_ssid_bitmap |= BIT(k);
+ 						s_max++;
+@@ -1835,23 +1864,6 @@ iwl_mvm_umac_scan_cfg_channels_v6_6g(struct iwl_mvm *mvm,
+ 		if (unsolicited_probe_on_chan)
+ 			flags |= IWL_UHB_CHAN_CFG_FLAG_UNSOLICITED_PROBE_RES;
+ 
+-		/*
+-		 * In the following cases apply passive scan:
+-		 * 1. Non fragmented scan:
+-		 *	- PSC channel with NO_LISTEN_FLAG on should be treated
+-		 *	  like non PSC channel
+-		 *	- Non PSC channel with more than 3 short SSIDs or more
+-		 *	  than 9 BSSIDs.
+-		 *	- Non PSC Channel with unsolicited probe response and
+-		 *	  more than 2 short SSIDs or more than 6 BSSIDs.
+-		 *	- PSC channel with more than 2 short SSIDs or more than
+-		 *	  6 BSSIDs.
+-		 * 3. Fragmented scan:
+-		 *	- PSC channel with more than 1 SSID or 3 BSSIDs.
+-		 *	- Non PSC channel with more than 2 SSIDs or 6 BSSIDs.
+-		 *	- Non PSC channel with unsolicited probe response and
+-		 *	  more than 1 SSID or more than 3 BSSIDs.
+-		 */
+ 		if (!iwl_mvm_is_scan_fragmented(params->type)) {
+ 			if (!cfg80211_channel_is_psc(params->channels[i]) ||
+ 			    flags & IWL_UHB_CHAN_CFG_FLAG_PSC_CHAN_NO_LISTEN) {
+@@ -1887,7 +1899,6 @@ iwl_mvm_umac_scan_cfg_channels_v6_6g(struct iwl_mvm *mvm,
+ 	return ch_cnt;
+ }
+ 
+-
+ static u8 iwl_mvm_scan_umac_chan_flags_v2(struct iwl_mvm *mvm,
+ 					  struct iwl_mvm_scan_params *params,
+ 					  struct ieee80211_vif *vif)
+@@ -2299,11 +2310,12 @@ static int iwl_mvm_scan_umac(struct iwl_mvm *mvm, struct ieee80211_vif *vif,
+ }
+ 
+ static void
+-iwl_mvm_scan_umac_fill_general_p_v11(struct iwl_mvm *mvm,
++iwl_mvm_scan_umac_fill_general_p_v12(struct iwl_mvm *mvm,
+ 				     struct iwl_mvm_scan_params *params,
+ 				     struct ieee80211_vif *vif,
+ 				     struct iwl_scan_general_params_v11 *gp,
+-				     u16 gen_flags, u8 gen_flags2)
++				     u16 gen_flags, u8 gen_flags2,
++				     u32 version)
+ {
+ 	struct iwl_mvm_vif *scan_vif = iwl_mvm_vif_from_mac80211(vif);
+ 
+@@ -2320,7 +2332,9 @@ iwl_mvm_scan_umac_fill_general_p_v11(struct iwl_mvm *mvm,
+ 	if (gen_flags & IWL_UMAC_SCAN_GEN_FLAGS_V2_FRAGMENTED_LMAC2)
+ 		gp->num_of_fragments[SCAN_HB_LMAC_IDX] = IWL_SCAN_NUM_OF_FRAGS;
+ 
++	/* 5.15 backport has no MLO link plumbing yet, so keep using the VIF MAC id. */
+ 	gp->scan_start_mac_id = scan_vif->id;
++	(void)version;
+ }
+ 
+ static void
+@@ -2374,9 +2388,9 @@ iwl_mvm_scan_umac_fill_ch_p_v6(struct iwl_mvm *mvm,
+ 		cp->n_aps_override[0] = IWL_MVM_ADAPTIVE_DWELL_NUM_APS_OVERRIDE;
+ 
+ 	iwl_mvm_umac_scan_cfg_channels_v6(mvm, params->channels, cp,
+-					  params->n_channels,
+-					  channel_cfg_flags,
+-					  vif->type);
++				  params->n_channels,
++				  channel_cfg_flags,
++				  vif->type);
+ 
+ 	if (params->enable_6ghz_passive) {
+ 		struct ieee80211_supported_band *sband =
+@@ -2394,7 +2408,7 @@ iwl_mvm_scan_umac_fill_ch_p_v6(struct iwl_mvm *mvm,
+ 				continue;
+ 
+ 			cfg->flags = 0;
+-			cfg->v2.channel_num = channel->hw_value;
++			cfg->channel_num = channel->hw_value;
+ 			cfg->v2.band = PHY_BAND_6;
+ 			cfg->v2.iter_count = 1;
+ 			cfg->v2.iter_interval = 0;
+@@ -2403,6 +2417,57 @@ iwl_mvm_scan_umac_fill_ch_p_v6(struct iwl_mvm *mvm,
+ 	}
+ }
+ 
++static void
++iwl_mvm_scan_umac_fill_ch_p_v7(struct iwl_mvm *mvm,
++			       struct iwl_mvm_scan_params *params,
++			       struct ieee80211_vif *vif,
++			       struct iwl_scan_channel_params_v7 *cp,
++			       u32 channel_cfg_flags,
++			       u32 version)
++{
++	cp->flags = iwl_mvm_scan_umac_chan_flags_v2(mvm, params, vif);
++	cp->count = params->n_channels;
++	cp->n_aps_override[0] = IWL_SCAN_ADWELL_N_APS_GO_FRIENDLY;
++	cp->n_aps_override[1] = IWL_SCAN_ADWELL_N_APS_SOCIAL_CHS;
++
++	if (IWL_MVM_ADAPTIVE_DWELL_NUM_APS_OVERRIDE)
++		cp->n_aps_override[0] = IWL_MVM_ADAPTIVE_DWELL_NUM_APS_OVERRIDE;
++
++	iwl_mvm_umac_scan_cfg_channels_v7(mvm, params->channels, cp,
++				  params->n_channels,
++				  channel_cfg_flags,
++				  vif->type, version);
++
++	if (params->enable_6ghz_passive) {
++		struct ieee80211_supported_band *sband =
++			&mvm->nvm_data->bands[NL80211_BAND_6GHZ];
++		u32 i;
++
++		for (i = 0; i < sband->n_channels; i++) {
++			struct ieee80211_channel *channel =
++				&sband->channels[i];
++
++			struct iwl_scan_channel_cfg_umac *cfg =
++				&cp->channel_config[cp->count];
++
++			if (!cfg80211_channel_is_psc(channel))
++				continue;
++
++			cfg->flags = 0;
++			cfg->channel_num = channel->hw_value;
++			if (version < 17)
++				cfg->v2.band = PHY_BAND_6;
++			else
++				cfg->flags |= cpu_to_le32(PHY_BAND_6 <<
++						   IWL_CHAN_CFG_FLAGS_BAND_POS);
++			cfg->v5.psd_20 = IEEE80211_RNR_TBTT_PARAMS_PSD_RESERVED;
++			cfg->v5.iter_count = 1;
++			cfg->v5.iter_interval = 0;
++			cp->count++;
++		}
++	}
++}
++
+ static int iwl_mvm_scan_umac_v12(struct iwl_mvm *mvm, struct ieee80211_vif *vif,
+ 				 struct iwl_mvm_scan_params *params, int type,
+ 				 int uid)
+@@ -2418,9 +2483,9 @@ static int iwl_mvm_scan_umac_v12(struct iwl_mvm *mvm, struct ieee80211_vif *vif,
+ 	cmd->uid = cpu_to_le32(uid);
+ 
+ 	gen_flags = iwl_mvm_scan_umac_flags_v2(mvm, params, vif, type);
+-	iwl_mvm_scan_umac_fill_general_p_v11(mvm, params, vif,
++	iwl_mvm_scan_umac_fill_general_p_v12(mvm, params, vif,
+ 					     &scan_p->general_params,
+-					     gen_flags, 0);
++					     gen_flags, 0, 12);
+ 
+ 	ret = iwl_mvm_fill_scan_sched_params(params,
+ 					     scan_p->periodic_params.schedule,
+@@ -2436,13 +2501,13 @@ static int iwl_mvm_scan_umac_v12(struct iwl_mvm *mvm, struct ieee80211_vif *vif,
+ }
+ 
+ static int iwl_mvm_scan_umac_v14_and_above(struct iwl_mvm *mvm,
+-					   struct ieee80211_vif *vif,
+-					   struct iwl_mvm_scan_params *params,
+-					   int type, int uid, u32 version)
++				   struct ieee80211_vif *vif,
++				   struct iwl_mvm_scan_params *params,
++				   int type, int uid, u32 version)
+ {
+-	struct iwl_scan_req_umac_v15 *cmd = mvm->scan_cmd;
+-	struct iwl_scan_req_params_v15 *scan_p = &cmd->scan_params;
+-	struct iwl_scan_channel_params_v6 *cp = &scan_p->channel_params;
++	struct iwl_scan_req_umac_v17 *cmd = mvm->scan_cmd;
++	struct iwl_scan_req_params_v17 *scan_p = &cmd->scan_params;
++	struct iwl_scan_channel_params_v7 *cp = &scan_p->channel_params;
+ 	struct iwl_scan_probe_params_v4 *pb = &scan_p->probe_params;
+ 	int ret;
+ 	u16 gen_flags;
+@@ -2461,38 +2526,36 @@ static int iwl_mvm_scan_umac_v14_and_above(struct iwl_mvm *mvm,
+ 	else
+ 		gen_flags2 = 0;
+ 
+-	iwl_mvm_scan_umac_fill_general_p_v11(mvm, params, vif,
+-					     &scan_p->general_params,
+-					     gen_flags, gen_flags2);
++	iwl_mvm_scan_umac_fill_general_p_v12(mvm, params, vif,
++				     &scan_p->general_params,
++				     gen_flags, gen_flags2, version);
+ 
+ 	ret = iwl_mvm_fill_scan_sched_params(params,
+-					     scan_p->periodic_params.schedule,
+-					     &scan_p->periodic_params.delay);
++				     scan_p->periodic_params.schedule,
++				     &scan_p->periodic_params.delay);
+ 	if (ret)
+ 		return ret;
+ 
+ 	if (!params->scan_6ghz) {
+ 		iwl_mvm_scan_umac_fill_probe_p_v4(params,
+-						  &scan_p->probe_params,
+-						  &bitmap_ssid);
+-		iwl_mvm_scan_umac_fill_ch_p_v6(mvm, params, vif,
++					  &scan_p->probe_params,
++					  &bitmap_ssid);
++		iwl_mvm_scan_umac_fill_ch_p_v7(mvm, params, vif,
+ 					       &scan_p->channel_params,
+-					       bitmap_ssid);
++					       bitmap_ssid, version);
+ 
+ 		return 0;
+-	} else {
+-		pb->preq = params->preq;
+ 	}
+ 
+-	cp->flags = iwl_mvm_scan_umac_chan_flags_v2(mvm, params, vif);
+-	cp->n_aps_override[0] = IWL_SCAN_ADWELL_N_APS_GO_FRIENDLY;
+-	cp->n_aps_override[1] = IWL_SCAN_ADWELL_N_APS_SOCIAL_CHS;
+-
++	pb->preq = params->preq;
+ 	iwl_mvm_umac_scan_fill_6g_chan_list(mvm, params, pb);
+ 
+-	cp->count = iwl_mvm_umac_scan_cfg_channels_v6_6g(mvm, params,
+-							 params->n_channels,
+-							 pb, cp, vif->type);
++	/* For newer scan APIs, the per-channel entries carry the relevant flags. */
++	cp->flags = 0;
++	cp->count = iwl_mvm_umac_scan_cfg_channels_v7_6g(mvm, params,
++						 params->n_channels,
++						 pb, cp, vif->type,
++						 version);
+ 	if (!cp->count) {
+ 		mvm->scan_uid_status[uid] = 0;
+ 		return -EINVAL;
+@@ -2519,6 +2582,20 @@ static int iwl_mvm_scan_umac_v15(struct iwl_mvm *mvm, struct ieee80211_vif *vif,
+ 	return iwl_mvm_scan_umac_v14_and_above(mvm, vif, params, type, uid, 15);
+ }
+ 
++static int iwl_mvm_scan_umac_v16(struct iwl_mvm *mvm, struct ieee80211_vif *vif,
++				 struct iwl_mvm_scan_params *params, int type,
++				 int uid)
++{
++	return iwl_mvm_scan_umac_v14_and_above(mvm, vif, params, type, uid, 16);
++}
++
++static int iwl_mvm_scan_umac_v17(struct iwl_mvm *mvm, struct ieee80211_vif *vif,
++				 struct iwl_mvm_scan_params *params, int type,
++				 int uid)
++{
++	return iwl_mvm_scan_umac_v14_and_above(mvm, vif, params, type, uid, 17);
++}
++
+ static int iwl_mvm_num_scans(struct iwl_mvm *mvm)
+ {
+ 	return hweight32(mvm->scan_status & IWL_MVM_SCAN_MASK);
+@@ -2634,6 +2711,8 @@ struct iwl_scan_umac_handler {
+ 
+ static const struct iwl_scan_umac_handler iwl_scan_umac_handlers[] = {
+ 	/* set the newest version first to shorten the list traverse time */
++	IWL_SCAN_UMAC_HANDLER(17),
++	IWL_SCAN_UMAC_HANDLER(16),
+ 	IWL_SCAN_UMAC_HANDLER(15),
+ 	IWL_SCAN_UMAC_HANDLER(14),
+ 	IWL_SCAN_UMAC_HANDLER(12),
+@@ -3224,7 +3303,9 @@ static int iwl_scan_req_umac_get_size(u8 scan_ver)
+ 		return sizeof(struct iwl_scan_req_umac_v12);
+ 	case 14:
+ 	case 15:
+-		return sizeof(struct iwl_scan_req_umac_v15);
++	case 16:
++	case 17:
++		return sizeof(struct iwl_scan_req_umac_v17);
+ 	}
+ 
+ 	return 0;
+diff --git a/iwlwifi-stack-dev/net/wireless/nl80211.c b/iwlwifi-stack-dev/net/wireless/nl80211.c
+index 936b156..bbc56bd 100644
+--- a/iwlwifi-stack-dev/net/wireless/nl80211.c
++++ b/iwlwifi-stack-dev/net/wireless/nl80211.c
+@@ -17623,7 +17623,7 @@ void nl80211_common_reg_change_event(enum nl80211_commands cmd_id,
+ 
+ 	rcu_read_lock();
+ 	genlmsg_multicast_allns(&nl80211_fam, msg, 0,
+-				NL80211_MCGRP_REGULATORY, GFP_ATOMIC);
++				NL80211_MCGRP_REGULATORY);
+ 	rcu_read_unlock();
+ 
+ 	return;
+@@ -18244,7 +18244,7 @@ void nl80211_send_beacon_hint_event(struct wiphy *wiphy,
+ 
+ 	rcu_read_lock();
+ 	genlmsg_multicast_allns(&nl80211_fam, msg, 0,
+-				NL80211_MCGRP_REGULATORY, GFP_ATOMIC);
++				NL80211_MCGRP_REGULATORY);
+ 	rcu_read_unlock();
+ 
+ 	return;

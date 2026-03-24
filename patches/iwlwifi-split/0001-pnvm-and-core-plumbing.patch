@@ -1,0 +1,392 @@
+diff --git a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/cfg/22000.c b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/cfg/22000.c
+index 98864cc..7637485 100644
+--- a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/cfg/22000.c
++++ b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/cfg/22000.c
+@@ -10,10 +10,10 @@
+ #include "fw/api/txq.h"
+ 
+ /* Highest firmware API version supported */
+-#define IWL_22000_UCODE_API_MAX	77
++#define IWL_22000_UCODE_API_MAX	101
+ 
+ /* Lowest firmware API version supported */
+-#define IWL_22000_UCODE_API_MIN	39
++#define IWL_22000_UCODE_API_MIN	83
+ 
+ /* NVM versions */
+ #define IWL_22000_NVM_VERSION		0x0a1d
+@@ -61,7 +61,7 @@
+ #define IWL_BZ_A_FM_B_FW_PRE		"iwlwifi-bz-a0-fm-b0-"
+ #define IWL_BZ_A_FM4_B_FW_PRE		"iwlwifi-bz-a0-fm4-b0-"
+ #define IWL_GL_A_FM_A_FW_PRE		"iwlwifi-gl-a0-fm-a0-"
+-#define IWL_GL_B_FM_B_FW_PRE		"iwlwifi-gl-b0-fm-b0-"
++#define IWL_GL_B_FM_B_FW_PRE		"iwlwifi-gl-c0-fm-c0-"
+ #define IWL_BZ_Z_GF_A_FW_PRE		"iwlwifi-bz-z0-gf-a0-"
+ #define IWL_BNJ_A_FM_A_FW_PRE		"iwlwifi-BzBnj-a0-fm-a0-"
+ #define IWL_BNJ_A_FM4_A_FW_PRE		"iwlwifi-BzBnj-a0-fm4-a0-"
+@@ -539,6 +539,18 @@ const struct iwl_cfg_trans_params iwl_bz_trans_cfg = {
+ 	.ltr_delay = IWL_CFG_TRANS_LTR_DELAY_2500US,
+ };
+ 
++const struct iwl_cfg_trans_params iwl_gl_trans_cfg = {
++	.device_family = IWL_DEVICE_FAMILY_BZ,
++	.base_params = &iwl_ax210_base_params,
++	.mq_rx_supported = true,
++	.use_tfh = true,
++	.rf_id = true,
++	.gen2 = true,
++	.umac_prph_offset = 0x300000,
++	.xtal_latency = 12000,
++	.low_latency_xtal = true,
++};
++
+ const char iwl_ax101_name[] = "Intel(R) Wi-Fi 6 AX101";
+ const char iwl_ax200_name[] = "Intel(R) Wi-Fi 6 AX200 160MHz";
+ const char iwl_ax201_name[] = "Intel(R) Wi-Fi 6 AX201 160MHz";
+@@ -1020,8 +1032,8 @@ const struct iwl_cfg iwl_cfg_gl_a0_fm_a0 = {
+ const struct iwl_cfg iwl_cfg_gl_b0_fm_b0 = {
+ 	.fw_name_pre = IWL_GL_B_FM_B_FW_PRE,
+ 	.uhb_supported = true,
+-	IWL_DEVICE_BZ,
+-	.features = IWL_TX_CSUM_NETIF_FLAGS_BZ | NETIF_F_RXCSUM,
++	IWL_DEVICE_GL_A,
++	.features = IWL_TX_CSUM_NETIF_FLAGS | NETIF_F_RXCSUM,
+ 	.num_rbds = IWL_NUM_RBDS_AX210_HE,
+ };
+ 
+diff --git a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/fw/file.h b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/fw/file.h
+index a70be3d..0ea6bca 100644
+--- a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/fw/file.h
++++ b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/fw/file.h
+@@ -105,6 +105,9 @@ enum iwl_ucode_tlv_type {
+ 	IWL_UCODE_TLV_D3_KEK_KCK_ADDR		= 67,
+ 	IWL_UCODE_TLV_CURRENT_PC		= 68,
+ 
++	/* contains sub-sections like PNVM file does */
++	IWL_UCODE_TLV_PNVM_DATA			= 74,
++
+ 	IWL_UCODE_TLV_FW_NUM_STATIONS		= IWL_UCODE_TLV_CONST_BASE + 0,
+ 
+ 	IWL_UCODE_TLV_TYPE_DEBUG_INFO		= IWL_UCODE_TLV_DEBUG_BASE + 0,
+@@ -285,6 +288,10 @@ enum iwl_ucode_tlv_api {
+ 	IWL_UCODE_TLV_API_ADWELL_HB_DEF_N_AP	= (__force iwl_ucode_tlv_api_t)57,
+ 	IWL_UCODE_TLV_API_SCAN_EXT_CHAN_VER	= (__force iwl_ucode_tlv_api_t)58,
+ 	IWL_UCODE_TLV_API_BAND_IN_RX_DATA	= (__force iwl_ucode_tlv_api_t)59,
++	/* API Set 2 */
++	IWL_UCODE_TLV_API_NO_HOST_DISABLE_TX	= (__force iwl_ucode_tlv_api_t)66,
++	IWL_UCODE_TLV_API_INT_DBG_BUF_CLEAR	= (__force iwl_ucode_tlv_api_t)67,
++	IWL_UCODE_TLV_API_SMART_FIFO_OFFLOAD	= (__force iwl_ucode_tlv_api_t)68,
+ 
+ 
+ #ifdef __CHECKER__
+@@ -417,6 +424,7 @@ enum iwl_ucode_tlv_capa {
+ 	IWL_UCODE_TLV_CAPA_GSCAN_SUPPORT		= (__force iwl_ucode_tlv_capa_t)31,
+ 
+ 	/* set 1 */
++	IWL_UCODE_TLV_CAPA_FRAGMENTED_PNVM_IMG		= (__force iwl_ucode_tlv_capa_t)32,
+ 	IWL_UCODE_TLV_CAPA_NAN_SUPPORT			= (__force iwl_ucode_tlv_capa_t)34,
+ 	IWL_UCODE_TLV_CAPA_UMAC_UPLOAD			= (__force iwl_ucode_tlv_capa_t)35,
+ 	IWL_UCODE_TLV_CAPA_SOC_LATENCY_SUPPORT		= (__force iwl_ucode_tlv_capa_t)37,
+@@ -489,6 +497,12 @@ enum iwl_ucode_tlv_capa {
+ 	IWL_UCODE_TLV_CAPA_BIGTK_TX_SUPPORT		= (__force iwl_ucode_tlv_capa_t)109,
+ 	IWL_UCODE_TLV_CAPA_MLD_API_SUPPORT		= (__force iwl_ucode_tlv_capa_t)110,
+ 	IWL_UCODE_TLV_CAPA_SCAN_DONT_TOGGLE_ANT         = (__force iwl_ucode_tlv_capa_t)111,
++	IWL_UCODE_TLV_CAPA_STA_EXP_MFP_SUPPORT		= (__force iwl_ucode_tlv_capa_t)114,
++
++	/* set 4 */
++	IWL_UCODE_TLV_CAPA_RESET_DURING_ASSERT		= (__force iwl_ucode_tlv_capa_t)(4 * 32 + 0),
++	IWL_UCODE_TLV_CAPA_FW_ACCEPTS_RAW_DSM_TABLE	= (__force iwl_ucode_tlv_capa_t)(4 * 32 + 1),
++	IWL_UCODE_TLV_CAPA_NAN_SYNC_SUPPORT		= (__force iwl_ucode_tlv_capa_t)(4 * 32 + 2),
+ 
+ #ifdef __CHECKER__
+ 	/* sparse says it cannot increment the previous enum member */
+diff --git a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/fw/img.h b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/fw/img.h
+index aa1d006..4367d64 100644
+--- a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/fw/img.h
++++ b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/fw/img.h
+@@ -225,6 +225,9 @@ struct iwl_fw {
+ 	u32 phy_integration_ver_len;
+ 
+ 	struct iwl_dump_exclude dump_excl[2], dump_excl_wowlan[2];
++
++	const void *pnvm_data;
++	u32 pnvm_size;
+ };
+ 
+ static inline const char *get_fw_dbg_mode_string(int mode)
+diff --git a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/fw/pnvm.c b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/fw/pnvm.c
+index c6f2672..bd4450a 100644
+--- a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/fw/pnvm.c
++++ b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/fw/pnvm.c
+@@ -5,6 +5,7 @@
+ 
+ #include "iwl-drv.h"
+ #include "pnvm.h"
++#include "img.h"
+ #include "iwl-prph.h"
+ #include "iwl-io.h"
+ #include "fw/api/commands.h"
+@@ -36,9 +37,9 @@ static int iwl_pnvm_handle_section(struct iwl_trans *trans, const u8 *data,
+ 	const struct iwl_ucode_tlv *tlv;
+ 	u32 sha1 = 0;
+ 	u16 mac_type = 0, rf_id = 0;
+-	u8 *pnvm_data = NULL, *tmp;
++	struct iwl_pnvm_chunked_pkg *pnvm_pkg = NULL, *tmp;
+ 	bool hw_match = false;
+-	u32 size = 0;
++	u32 size = 0, n_chunks = 0;
+ 	int ret;
+ 
+ 	IWL_DEBUG_FW(trans, "Handling PNVM section\n");
+@@ -115,7 +116,14 @@ static int iwl_pnvm_handle_section(struct iwl_trans *trans, const u8 *data,
+ 			IWL_DEBUG_FW(trans, "Adding data (size %d)\n",
+ 				     data_len);
+ 
+-			tmp = krealloc(pnvm_data, size + data_len, GFP_KERNEL);
++			if (n_chunks >= IWL_PNVM_CHUNK_MAX) {
++				IWL_DEBUG_FW(trans, "too many PNVM chunks\n");
++				ret = -EINVAL;
++				goto out;
++			}
++
++			tmp = krealloc(pnvm_pkg, sizeof(*pnvm_pkg) + size + data_len,
++				      GFP_KERNEL);
+ 			if (!tmp) {
+ 				IWL_DEBUG_FW(trans,
+ 					     "Couldn't allocate (more) pnvm_data\n");
+@@ -124,9 +132,9 @@ static int iwl_pnvm_handle_section(struct iwl_trans *trans, const u8 *data,
+ 				goto out;
+ 			}
+ 
+-			pnvm_data = tmp;
+-
+-			memcpy(pnvm_data + size, section->data, data_len);
++			pnvm_pkg = tmp;
++			pnvm_pkg->chunk_len[n_chunks++] = cpu_to_le32(data_len);
++			memcpy(pnvm_pkg->data + size, section->data, data_len);
+ 
+ 			size += data_len;
+ 
+@@ -156,7 +164,7 @@ done:
+ 		goto out;
+ 	}
+ 
+-	if (!size) {
++	if (!n_chunks || !size) {
+ 		IWL_DEBUG_FW(trans, "Empty PNVM, skipping.\n");
+ 		ret = -ENOENT;
+ 		goto out;
+@@ -164,9 +172,12 @@ done:
+ 
+ 	IWL_INFO(trans, "loaded PNVM version %08x\n", sha1);
+ 
+-	ret = iwl_trans_set_pnvm(trans, pnvm_data, size);
++	pnvm_pkg->n_chunks = cpu_to_le32(n_chunks);
++	pnvm_pkg->version = cpu_to_le32(sha1);
++
++	ret = iwl_trans_set_pnvm(trans, pnvm_pkg, sizeof(*pnvm_pkg) + size);
+ out:
+-	kfree(pnvm_data);
++	kfree(pnvm_pkg);
+ 	return ret;
+ }
+ 
+@@ -255,9 +266,20 @@ static int iwl_pnvm_get_from_fs(struct iwl_trans *trans, u8 **data, size_t *len)
+ 	return 0;
+ }
+ 
++static const u8 *iwl_pnvm_get_from_ucode(const struct iwl_fw *fw, size_t *len)
++{
++	if (!fw || !fw->pnvm_data || !fw->pnvm_size)
++		return NULL;
++
++	*len = fw->pnvm_size;
++	return fw->pnvm_data;
++}
++
+ int iwl_pnvm_load(struct iwl_trans *trans,
+-		  struct iwl_notif_wait_data *notif_wait)
++		  struct iwl_notif_wait_data *notif_wait,
++		  const struct iwl_fw *fw)
+ {
++	const u8 *embedded_pnvm;
+ 	u8 *data;
+ 	size_t len;
+ 	struct pnvm_sku_package *package;
+@@ -281,6 +303,18 @@ int iwl_pnvm_load(struct iwl_trans *trans,
+ 		goto skip_parse;
+ 	}
+ 
++	embedded_pnvm = iwl_pnvm_get_from_ucode(fw, &len);
++	if (embedded_pnvm) {
++		IWL_DEBUG_FW(trans, "Trying embedded PNVM data from .ucode\n");
++		ret = iwl_pnvm_parse(trans, embedded_pnvm, len);
++		if (!ret)
++			goto skip_parse;
++
++		IWL_DEBUG_FW(trans,
++			     "Embedded PNVM parse failed: %d, falling back\n",
++			     ret);
++	}
++
+ 	/* First attempt to get the PNVM from BIOS */
+ 	package = iwl_uefi_get_pnvm(trans, &len);
+ 	if (!IS_ERR_OR_NULL(package)) {
+@@ -313,7 +347,9 @@ int iwl_pnvm_load(struct iwl_trans *trans,
+ 	}
+ 
+ parse:
+-	iwl_pnvm_parse(trans, data, len);
++	ret = iwl_pnvm_parse(trans, data, len);
++	if (ret)
++		IWL_DEBUG_FW(trans, "PNVM image parse returned %d\n", ret);
+ 
+ 	kfree(data);
+ 
+diff --git a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/fw/pnvm.h b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/fw/pnvm.h
+index 9076aa7..62fedac 100644
+--- a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/fw/pnvm.h
++++ b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/fw/pnvm.h
+@@ -10,14 +10,25 @@
+ 
+ #include "fw/notif-wait.h"
+ 
++struct iwl_fw;
++
+ #define MVM_UCODE_PNVM_TIMEOUT	(HZ / 4 * CPTCFG_IWL_TIMEOUT_FACTOR)
+ 
+ #define MAX_PNVM_NAME  64
+ 
+-#define MAX_PNVM_NAME  64
++#define IWL_PNVM_CHUNK_MAX 64
++
++struct iwl_pnvm_chunked_pkg {
++	__le32 n_chunks;
++	__le32 version;
++	__le32 chunk_len[IWL_PNVM_CHUNK_MAX];
++	u8 data[];
++};
++
+ 
+ int iwl_pnvm_load(struct iwl_trans *trans,
+-		  struct iwl_notif_wait_data *notif_wait);
++		  struct iwl_notif_wait_data *notif_wait,
++		  const struct iwl_fw *fw);
+ 
+ static inline
+ void iwl_pnvm_get_fs_name(struct iwl_trans *trans,
+diff --git a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/iwl-config.h b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/iwl-config.h
+index 72152fa..1091727 100644
+--- a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/iwl-config.h
++++ b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/iwl-config.h
+@@ -497,6 +497,7 @@ extern const struct iwl_cfg_trans_params iwl_so_long_latency_trans_cfg;
+ extern const struct iwl_cfg_trans_params iwl_so_long_latency_imr_trans_cfg;
+ extern const struct iwl_cfg_trans_params iwl_ma_trans_cfg;
+ extern const struct iwl_cfg_trans_params iwl_bz_trans_cfg;
++extern const struct iwl_cfg_trans_params iwl_gl_trans_cfg;
+ extern const char iwl9162_name[];
+ extern const char iwl9260_name[];
+ extern const char iwl9260_1_name[];
+diff --git a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/iwl-drv.c b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/iwl-drv.c
+index 8b2ee3f..b507bd5 100644
+--- a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/iwl-drv.c
++++ b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/iwl-drv.c
+@@ -244,6 +244,13 @@ int iwl_drv_switch_op_mode(struct iwl_drv *drv, const char *new_op_name)
+ }
+ IWL_EXPORT_SYMBOL(iwl_drv_switch_op_mode);
+ 
++bool iwl_drv_has_fw_capa(struct iwl_drv *drv, u32 capa)
++{
++return fw_has_capa(&drv->fw.ucode_capa,
++   (iwl_ucode_tlv_capa_t)capa);
++}
++IWL_EXPORT_SYMBOL(iwl_drv_has_fw_capa);
++
+ /*
+  * iwl_drv_sysfs_show - Returns device information to user
+  */
+@@ -343,6 +350,7 @@ static void iwl_dealloc_ucode(struct iwl_drv *drv)
+ 	kfree(drv->fw.iml);
+ 	kfree(drv->fw.ucode_capa.cmd_versions);
+ 	kfree(drv->fw.phy_integration_ver);
++	kvfree(drv->fw.pnvm_data);
+ 	kfree(drv->trans->dbg.pc_data);
+ 
+ 	for (i = 0; i < IWL_UCODE_TYPE_MAX; i++)
+@@ -1532,7 +1540,16 @@ fw_dbg_conf:
+ 				goto invalid_tlv_len;
+ 			drv->trans->dbg.num_pc = tlv_len / sizeof(struct iwl_pc_data);
+ 			drv->trans->dbg.pc_data = kmemdup(tlv_data, tlv_len, GFP_KERNEL);
+-		break;
++			break;
++		case IWL_UCODE_TLV_PNVM_DATA:
++			if (drv->fw.pnvm_data)
++				break;
++			drv->fw.pnvm_data = kvmalloc(tlv_len, GFP_KERNEL);
++			if (!drv->fw.pnvm_data)
++				return -ENOMEM;
++			memcpy((void *)drv->fw.pnvm_data, tlv_data, tlv_len);
++			drv->fw.pnvm_size = tlv_len;
++			break;
+ 		default:
+ 			IWL_DEBUG_INFO(drv, "unknown TLV: %d\n", tlv_type);
+ 			break;
+diff --git a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/iwl-drv.h b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/iwl-drv.h
+index 92b8618..0a38867 100644
+--- a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/iwl-drv.h
++++ b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/iwl-drv.h
+@@ -91,6 +91,8 @@ struct iwl_drv *iwl_drv_get_dev_container(struct device *dev);
+  */
+ int iwl_drv_switch_op_mode(struct iwl_drv *drv, const char *new_op_name);
+ 
++bool iwl_drv_has_fw_capa(struct iwl_drv *drv, u32 capa);
++
+ /*
+  * exported symbol management
+  *
+diff --git a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/iwl-trans.h b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/iwl-trans.h
+index ad7c77c..d876488 100644
+--- a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/iwl-trans.h
++++ b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/iwl-trans.h
+@@ -1082,6 +1082,7 @@ struct iwl_trans {
+ 	bool ltr_enabled;
+ 	u8 pnvm_loaded:1;
+ 	u8 reduce_power_loaded:1;
++	u8 do_top_reset:1;
+ 
+ 	const struct iwl_hcmd_arr *command_groups;
+ 	int command_groups_size;
+diff --git a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/pcie/drv.c b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/pcie/drv.c
+index 7ca6b90..6f63b6d 100644
+--- a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/pcie/drv.c
++++ b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/pcie/drv.c
+@@ -509,7 +509,7 @@ static const struct pci_device_id iwl_hw_card_ids[] = {
+ 
+ /* Bz devices */
+ 	{IWL_PCI_DEVICE(0x2727, PCI_ANY_ID, iwl_bz_trans_cfg)},
+-	{IWL_PCI_DEVICE(0x272b, PCI_ANY_ID, iwl_bz_trans_cfg)},
++	{IWL_PCI_DEVICE(0x272b, PCI_ANY_ID, iwl_gl_trans_cfg)},
+ 	{IWL_PCI_DEVICE(0xA840, PCI_ANY_ID, iwl_bz_trans_cfg)},
+ 	{IWL_PCI_DEVICE(0x7740, PCI_ANY_ID, iwl_bz_trans_cfg)},
+ #endif /* CPTCFG_IWLMVM */
+@@ -696,6 +696,7 @@ static const struct iwl_dev_info iwl_dev_info_table[] = {
+ 	/* MA with GF2 */
+ 	IWL_DEV_INFO(0x7E40, 0x1671, iwl_cfg_ma_a0_gf_a0, iwl_ax211_killer_1675s_name),
+ 	IWL_DEV_INFO(0x7E40, 0x1672, iwl_cfg_ma_a0_gf_a0, iwl_ax211_killer_1675i_name),
++	IWL_DEV_INFO(0x272b, 0x00f4, iwl_cfg_gl_b0_fm_b0, iwl_bz_name),
+ 
+ 	_IWL_DEV_INFO(IWL_CFG_ANY, IWL_CFG_ANY,
+ 		      IWL_CFG_MAC_TYPE_PU, IWL_CFG_ANY,
+diff --git a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/xvt/fw.c b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/xvt/fw.c
+index 86e866d..a0c8376 100644
+--- a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/xvt/fw.c
++++ b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/xvt/fw.c
+@@ -221,7 +221,7 @@ static int iwl_xvt_load_ucode_wait_alive(struct iwl_xvt *xvt,
+ 	/* fresh firmware was loaded */
+ 	xvt->fw_error = false;
+ 
+-	ret = iwl_pnvm_load(xvt->trans, &xvt->notif_wait);
++	ret = iwl_pnvm_load(xvt->trans, &xvt->notif_wait, xvt->fw);
+ 	if (ret) {
+ 		IWL_ERR(xvt, "Timeout waiting for PNVM load!\n");
+ 		iwl_fw_set_current_image(&xvt->fwrt, old_type);

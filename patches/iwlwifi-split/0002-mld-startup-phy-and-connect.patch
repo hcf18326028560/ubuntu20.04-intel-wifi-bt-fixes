@@ -1,0 +1,1361 @@
+diff --git a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/fw/api/mac-cfg.h b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/fw/api/mac-cfg.h
+index f2f8f3f..226e267 100644
+--- a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/fw/api/mac-cfg.h
++++ b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/fw/api/mac-cfg.h
+@@ -211,17 +211,30 @@ struct iwl_mac_low_latency_cmd {
+  * struct iwl_mac_client_data - configuration data for client MAC context
+  *
+  * @is_assoc: 1 for associated state, 0 otherwise
++ * @esr_transition_timeout: the timeout required by the AP for the
++ *	eSR transition.
++ *	Available only from version 2 of the command.
++ *	This value comes from the EMLSR transition delay in the EML
++ *	Capabilities subfield.
++ * @medium_sync_delay: the value as it appears in P802.11be_D2.2 Figure 9-1002j.
+  * @assoc_id: unique ID assigned by the AP during association
++ * @reserved1: alignment
+  * @data_policy: see &enum iwl_mac_data_policy
++ * @reserved2: alignment
+  * @ctwin: client traffic window in TU (period after TBTT when GO is present).
+  *	0 indicates that there is no CT window.
+  */
+ struct iwl_mac_client_data {
+-	__le32 is_assoc;
+-	__le32 assoc_id;
+-	__le32 data_policy;
++	u8 is_assoc;
++	u8 esr_transition_timeout;
++	__le16 medium_sync_delay;
++
++	__le16 assoc_id;
++	__le16 reserved1;
++	__le16 data_policy;
++	__le16 reserved2;
+ 	__le32 ctwin;
+-} __packed; /* MAC_CONTEXT_CONFIG_CLIENT_DATA_API_S_VER_1 */
++} __packed; /* MAC_CONTEXT_CONFIG_CLIENT_DATA_API_S_VER_2 */
+ 
+ /**
+  * struct iwl_mac_go_ibss_data - configuration data for GO and IBSS MAC context
+@@ -266,27 +279,60 @@ enum iwl_mac_config_filter_flags {
+ 	MAC_CFG_FILTER_ACCEPT_PROBE_REQ		= BIT(5),
+ }; /* MAC_FILTER_FLAGS_MASK_E_VER_1 */
+ 
++/**
++ * struct iwl_mac_wifi_gen_support_v2 - parameters of iwl_mac_config_cmd
++ *	with support up to eht as in version 2 of the command
++ *
++ * @he_support: does this MAC support HE
++ * @he_ap_support: HE AP enabled, "pseudo HE", no trigger frame handling
++ * @eht_support: does this MAC support EHT. Requires he_support
++ */
++struct iwl_mac_wifi_gen_support_v2 {
++	__le16 he_support;
++	__le16 he_ap_support;
++	__le32 eht_support;
++} __packed;
++
++/**
++ * struct iwl_mac_wifi_gen_support - parameters of iwl_mac_config_cmd
++ *	with support up to uhr as in version 3 of the command
++ * ( MAC_CONTEXT_CONFIG_CMD = 0x8 )
++ *
++ * @he_support: does this MAC support HE
++ * @he_ap_support: HE AP enabled, "pseudo HE", no trigger frame handling
++ * @eht_support: does this MAC support EHT. Requires he_support
++ * @uhr_support: does this MAC support UHR. Requires eht_support
++ * @reserved: reserved for alignment and to match version 2's size
++ */
++struct iwl_mac_wifi_gen_support {
++	u8 he_support;
++	u8 he_ap_support;
++	u8 eht_support;
++	u8 uhr_support;
++	__le32 reserved;
++} __packed;
++
+ /**
+  * struct iwl_mac_config_cmd - command structure to configure MAC contexts in
+- *	MLD API
++ *	MLD API for versions 2 and 3
+  * ( MAC_CONTEXT_CONFIG_CMD = 0x8 )
+  *
+  * @id_and_color: ID and color of the MAC
+- * @action: action to perform, one of FW_CTXT_ACTION_*
++ * @action: action to perform, see &enum iwl_ctxt_action
+  * @mac_type: one of &enum iwl_mac_types
+  * @local_mld_addr: mld address
+  * @reserved_for_local_mld_addr: reserved
+  * @filter_flags: combination of &enum iwl_mac_config_filter_flags
+- * @he_support: does this MAC support HE
+- * @he_ap_support: HE AP enabled, "pseudo HE", no trigger frame handling
+- * @eht_support: does this MAC support EHT. Requires he_support
++ * @wifi_gen_v2: he/eht parameters as in cmd version 2
++ * @wifi_gen: he/eht/uhr parameters as in cmd version 3
+  * @nic_not_ack_enabled: mark that the NIC doesn't support receiving
+  *	ACK-enabled AGG, (i.e. both BACK and non-BACK frames in single AGG).
+  *	If the NIC is not ACK_ENABLED it may use the EOF-bit in first non-0
+  *	len delim to determine if AGG or single.
++ * @client: client mac data
++ * @p2p_dev: mac data for p2p device
+  */
+ struct iwl_mac_config_cmd {
+-	/* COMMON_INDEX_HDR_API_S_VER_1 */
+ 	__le32 id_and_color;
+ 	__le32 action;
+ 	/* MAC_CONTEXT_TYPE_API_E */
+@@ -294,17 +340,18 @@ struct iwl_mac_config_cmd {
+ 	u8 local_mld_addr[6];
+ 	__le16 reserved_for_local_mld_addr;
+ 	__le32 filter_flags;
+-	__le16 he_support;
+-	__le16 he_ap_support;
+-	__le32 eht_support;
++	union {
++		struct iwl_mac_wifi_gen_support_v2 wifi_gen_v2;
++		struct iwl_mac_wifi_gen_support wifi_gen;
++	};
+ 	__le32 nic_not_ack_enabled;
+-	/* MAC_CONTEXT_CONFIG_SPECIFIC_DATA_API_U_VER_1 */
++	/* MAC_CONTEXT_CONFIG_SPECIFIC_DATA_API_U_VER_2 */
+ 	union {
+ 		struct iwl_mac_client_data client;
+ 		struct iwl_mac_go_ibss_data go_ibss;
+ 		struct iwl_mac_p2p_dev_data p2p_dev;
+ 	};
+-} __packed; /* MAC_CONTEXT_CONFIG_CMD_API_S_VER_1 */
++} __packed; /* MAC_CONTEXT_CONFIG_CMD_API_S_VER_2_VER_3 */
+ 
+ /**
+  * enum iwl_link_ctx_modify_flags - indicate to the fw what fields are being
+@@ -340,7 +387,11 @@ struct iwl_mac_config_cmd {
+  *	iwl_link_ctx_cfg_cmd::bss_color_disable
+  * @LINK_CONTEXT_MODIFY_EHT_PARAMS: covers iwl_link_ctx_cfg_cmd::puncture_mask.
+  *	This flag can be set only if the MAC that this link relates to has
+- *	eht_support set to true.
++ *	eht_support set to true. No longer used since _VER_3 of this command.
++ * @LINK_CONTEXT_MODIFY_BANDWIDTH: Covers iwl_link_ctx_cfg_cmd::modify_bandwidth.
++ *	Request RX OMI to the AP to modify bandwidth of this link.
++ * @LINK_CONTEXT_MODIFY_UHR_PARAMS: covers iwl_link_ctx_cfg_cmd::npca_params and
++ *	iwl_link_ctx_cfg_cmd::prio_edca_params. Since _VER_7.
+  * @LINK_CONTEXT_MODIFY_ALL: set all above flags
+  */
+ enum iwl_link_ctx_modify_flags {
+@@ -352,6 +403,8 @@ enum iwl_link_ctx_modify_flags {
+ 	LINK_CONTEXT_MODIFY_HE_PARAMS		= BIT(5),
+ 	LINK_CONTEXT_MODIFY_BSS_COLOR_DISABLE	= BIT(6),
+ 	LINK_CONTEXT_MODIFY_EHT_PARAMS		= BIT(7),
++	LINK_CONTEXT_MODIFY_BANDWIDTH		= BIT(8),
++	LINK_CONTEXT_MODIFY_UHR_PARAMS		= BIT(9),
+ 	LINK_CONTEXT_MODIFY_ALL			= 0xff,
+ }; /* LINK_CONTEXT_MODIFY_MASK_E_VER_1 */
+ 
+@@ -392,12 +445,60 @@ enum iwl_link_ctx_flags {
+ 	LINK_FLG_NDP_FEEDBACK_ENABLED	= BIT(3),
+ }; /* LINK_CONTEXT_FLAG_E_VER_1 */
+ 
++/**
++ * enum iwl_link_modify_bandwidth - link modify (RX OMI) bandwidth
++ * @IWL_LINK_MODIFY_BW_20: request 20 MHz
++ * @IWL_LINK_MODIFY_BW_40: request 40 MHz
++ * @IWL_LINK_MODIFY_BW_80: request 80 MHz
++ * @IWL_LINK_MODIFY_BW_160: request 160 MHz
++ * @IWL_LINK_MODIFY_BW_320: request 320 MHz
++ */
++enum iwl_link_modify_bandwidth {
++	IWL_LINK_MODIFY_BW_20,
++	IWL_LINK_MODIFY_BW_40,
++	IWL_LINK_MODIFY_BW_80,
++	IWL_LINK_MODIFY_BW_160,
++	IWL_LINK_MODIFY_BW_320,
++};
++
++/**
++ * enum iwl_npca_flags - NPCA flags
++ * @IWL_NPCA_FLAG_MAC_HDR_BASED: MAC header based NPCA operation
++ *	permitted in the BSS (MOPLEN)
++ */
++enum iwl_npca_flags {
++	IWL_NPCA_FLAG_MAC_HDR_BASED = BIT(0),
++}; /* NPCA_FLAG_E */
++
++/**
++ * struct iwl_npca_params - NPCA parameters (non-primary channel access)
++ *
++ * @dis_subch_bmap: disabled subchannel bitmap for NPCA
++ * @switch_delay: after switch, delay TX according to destination AP
++ * @switch_back_delay: switch back to control channel before OBSS frame end
++ * @initial_qsrc: Indicates the value that is used to initialize the
++ *	EDCAF QSRC[AC] variables
++ * @min_dur_threshold: minimum PPDU time to switch to the non-primary
++ *	NPCA channel (usec)
++ * @flags: NPCA flags, see &enum iwl_npca_flags
++ * @reserved: reserved for alignment purposes
++ */
++struct iwl_npca_params {
++	__le16 dis_subch_bmap;
++	u8 switch_delay;
++	u8 switch_back_delay;
++	u8 initial_qsrc;
++	u8 min_dur_threshold;
++	u8 flags;
++	u8 reserved;
++} __packed; /* NPCA_PARAM_API_S_VER_2 */
++
+ /**
+  * struct iwl_link_config_cmd - command structure to configure the LINK context
+  *	in MLD API
+  * ( LINK_CONFIG_CMD =0x9 )
+  *
+- * @action: action to perform, one of FW_CTXT_ACTION_*
++ * @action: action to perform, see &enum iwl_ctxt_action
+  * @link_id: the id of the link that this cmd configures
+  * @mac_id: interface ID. Relevant only if action is FW_CTXT_ACTION_ADD
+  * @phy_id: PHY index. Can be changed only if the link was inactive
+@@ -413,6 +514,12 @@ enum iwl_link_ctx_flags {
+  * @listen_lmac: indicates whether the link should be allocated on the Listen
+  *	Lmac or on the Main Lmac. Cannot be changed on an active Link.
+  *	Relevant only for eSR.
++ * @block_tx: tell the firmware that this link can't Tx. This should be used
++ *	only when a link is de-activated because of CSA with mode = 1.
++ *	Available since version 5.
++ * @modify_bandwidth: bandwidth request value for RX OMI (see also
++ *	%LINK_CONTEXT_MODIFY_BANDWIDTH), from &enum iwl_link_modify_bandwidth.
++ * @reserved1: in version 2, listen_lmac became reserved
+  * @cck_rates: basic rates available for CCK
+  * @ofdm_rates: basic rates available for OFDM
+  * @cck_short_preamble: 1 for enabling short preamble, 0 otherwise
+@@ -428,7 +535,7 @@ enum iwl_link_ctx_flags {
+  * @bi: beacon interval in TU, applicable only when associated
+  * @dtim_interval: DTIM interval in TU.
+  *	Relevant only for GO, otherwise this is offloaded.
+- * @puncture_mask: puncture mask for EHT
++ * @puncture_mask: puncture mask for EHT (removed in VER_3)
+  * @frame_time_rts_th: HE duration RTS threshold, in units of 32us
+  * @flags: a combination from &enum iwl_link_ctx_flags
+  * @flags_mask: what of %flags have changed. Also &enum iwl_link_ctx_flags
+@@ -437,10 +544,15 @@ enum iwl_link_ctx_flags {
+  * @reserved_for_ref_bssid_addr: reserved
+  * @bssid_index: index of the associated VAP
+  * @bss_color: 11ax AP ID that is used in the HE SIG-A to mark inter BSS frame
+- * @reserved: alignment
++ * @spec_link_id: link_id as the AP knows it
++ * @ul_mu_data_disable: OM Control UL MU Data Disable RX Support (bit 44) in
++ *	HE MAC Capabilities information field as defined in figure 9-897 in
++ *	IEEE802.11REVme-D5.0
+  * @ibss_bssid_addr: bssid for ibss
+  * @reserved_for_ibss_bssid_addr: reserved
+- * @reserved1: reserved for future use
++ * @npca_params: NPCA parameters
++ * @prio_edca_params: priority EDCA parameters for enhanced QoS
++ * @reserved3: reserved for future use
+  */
+ struct iwl_link_config_cmd {
+ 	__le32 action;
+@@ -451,7 +563,14 @@ struct iwl_link_config_cmd {
+ 	__le16 reserved_for_local_link_addr;
+ 	__le32 modify_mask;
+ 	__le32 active;
+-	__le32 listen_lmac;
++	union {
++		__le32 listen_lmac; /* only _VER_1 */
++		struct {
++			u8 block_tx; /* since _VER_5 */
++			u8 modify_bandwidth; /* since _VER_6 */
++			u8 reserved1[2];
++		};
++	};
+ 	__le32 cck_rates;
+ 	__le32 ofdm_rates;
+ 	__le32 cck_short_preamble;
+@@ -467,20 +586,24 @@ struct iwl_link_config_cmd {
+ 	struct iwl_he_backoff_conf trig_based_txf[AC_NUM];
+ 	__le32 bi;
+ 	__le32 dtim_interval;
+-	__le16 puncture_mask;
++	__le16 puncture_mask; /* removed in _VER_3 */
+ 	__le16 frame_time_rts_th;
+ 	__le32 flags;
+-	__le32 flags_mask;
++	__le32 flags_mask; /* removed in _VER_6 */
+ 	/* The below fields are for multi-bssid */
+ 	u8 ref_bssid_addr[6];
+ 	__le16 reserved_for_ref_bssid_addr;
+ 	u8 bssid_index;
+ 	u8 bss_color;
+-	u8 reserved[2];
++	u8 spec_link_id;
++	u8 ul_mu_data_disable;
+ 	u8 ibss_bssid_addr[6];
+ 	__le16 reserved_for_ibss_bssid_addr;
+-	__le32 reserved1[8];
+-} __packed; /* LINK_CONTEXT_CONFIG_CMD_API_S_VER_1 */
++	struct iwl_npca_params npca_params; /* since _VER_7 */
++	struct iwl_ac_qos prio_edca_params; /* since _VER_7 */
++	__le32 reserved3[4];
++} __packed; /* LINK_CONTEXT_CONFIG_CMD_API_S_VER_1, _VER_2, _VER_3, _VER_4,
++	     *				    _VER_5, _VER_6, _VER_7, _VER_8 */
+ 
+ /* Currently FW supports link ids in the range 0-3 and can have
+  * at most two active links for each vif.
+@@ -540,7 +663,7 @@ enum iwl_fw_sta_type {
+  *	capa
+  * @htc_flags: which features are supported in HTC
+  */
+-struct iwl_mvm_sta_cfg_cmd {
++struct iwl_mvm_sta_cfg_cmd_v1 {
+ 	__le32 sta_id;
+ 	__le32 link_id;
+ 	u8 peer_mld_address[ETH_ALEN];
+@@ -563,6 +686,36 @@ struct iwl_mvm_sta_cfg_cmd {
+ 	__le32 htc_flags;
+ } __packed; /* STA_CMD_API_S_VER_1 */
+ 
++struct iwl_mvm_sta_cfg_cmd {
++	__le32 sta_id;
++	__le32 link_id;
++	u8 peer_mld_address[ETH_ALEN];
++	__le16 reserved_for_peer_mld_address;
++	u8 peer_link_address[ETH_ALEN];
++	__le16 reserved_for_peer_link_address;
++	__le32 station_type;
++	__le32 assoc_id;
++	__le32 beamform_flags;
++	__le32 mfp;
++	__le32 mimo;
++	__le32 mimo_protection;
++	__le32 ack_enabled;
++	__le32 trig_rnd_alloc;
++	__le32 tx_ampdu_spacing;
++	__le32 tx_ampdu_max_size;
++	__le32 sp_length;
++	__le32 uapsd_acs;
++	struct iwl_he_pkt_ext_v2 pkt_ext;
++	__le32 htc_flags;
++	u8 use_ldpc_x2_cw;
++	u8 use_icf;
++	u8 dps_pad_time;
++	u8 dps_trans_delay;
++	u8 mic_prep_pad_delay;
++	u8 mic_compute_pad_delay;
++	u8 reserved[2];
++} __packed; /* STA_CMD_API_S_VER_2 */
++
+ /**
+  * struct iwl_mvm_aux_sta_cmd - command for AUX STA configuration
+  * ( AUX_STA_CMD = 0xB )
+diff --git a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/fw/api/phy-ctxt.h b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/fw/api/phy-ctxt.h
+index 2f7d855..62ecea1 100644
+--- a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/fw/api/phy-ctxt.h
++++ b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/fw/api/phy-ctxt.h
+@@ -142,7 +142,11 @@ struct iwl_phy_context_cmd_v1 {
+  * @lmac_id: the lmac id the phy context belongs to
+  * @ci: channel info
+  * @rxchain_info: ???
++ * @sbb_bandwidth: 0 disabled, 1 - 40Mhz ... 4 - 320MHz
++ * @sbb_ctrl_channel_loc: location of the control channel
++ * @puncture_mask: bitmap of punctured subchannels
+  * @dsp_cfg_flags: set to 0
++ * @secondary_ctrl_chnl_loc: location of secondary control channel
+  * @reserved: reserved to align to 64 bit
+  */
+ struct iwl_phy_context_cmd {
+@@ -152,9 +156,19 @@ struct iwl_phy_context_cmd {
+ 	/* PHY_CONTEXT_DATA_API_S_VER_3, PHY_CONTEXT_DATA_API_S_VER_4 */
+ 	struct iwl_fw_channel_info ci;
+ 	__le32 lmac_id;
+-	__le32 rxchain_info; /* reserved in _VER_4 */
++	union {
++		__le32 rxchain_info; /* reserved in _VER_4 */
++		struct {
++			u8 sbb_bandwidth;
++			u8 sbb_ctrl_channel_loc;
++			__le16 puncture_mask;
++		};
++	};
+ 	__le32 dsp_cfg_flags;
+-	__le32 reserved;
+-} __packed; /* PHY_CONTEXT_CMD_API_VER_3, PHY_CONTEXT_CMD_API_VER_4 */
++	u8 secondary_ctrl_chnl_loc;
++	u8 reserved[3];
++} __packed; /* PHY_CONTEXT_CMD_API_VER_3, PHY_CONTEXT_CMD_API_VER_4,
++	     PHY_CONTEXT_CMD_API_VER_5, PHY_CONTEXT_CMD_API_VER_6,
++	     PHY_CONTEXT_CMD_API_S_VER_7 */
+ 
+ #endif /* __iwl_fw_api_phy_ctxt_h__ */
+diff --git a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/fw/api/power.h b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/fw/api/power.h
+index f92cac1..7505ee4 100644
+--- a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/fw/api/power.h
++++ b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/fw/api/power.h
+@@ -264,6 +264,7 @@ struct iwl_reduce_tx_power_cmd {
+ 
+ enum iwl_dev_tx_power_cmd_mode {
+ 	IWL_TX_POWER_MODE_SET_MAC = 0,
++	IWL_TX_POWER_MODE_SET_LINK = IWL_TX_POWER_MODE_SET_MAC,
+ 	IWL_TX_POWER_MODE_SET_DEVICE = 1,
+ 	IWL_TX_POWER_MODE_SET_CHAINS = 2,
+ 	IWL_TX_POWER_MODE_SET_ACK = 3,
+@@ -401,6 +402,64 @@ struct iwl_dev_tx_power_cmd {
+ 	};
+ };
+ 
++/* Per-band restrictions moved out of the common header in newer FW. */
++struct iwl_dev_tx_power_cmd_per_band {
++	__le16 dev_24;
++	__le16 dev_52_low;
++	__le16 dev_52_high;
++} __packed;
++
++struct iwl_dev_tx_power_cmd_v8 {
++	__le16 per_chain[IWL_NUM_CHAIN_TABLES_V2][IWL_NUM_CHAIN_LIMITS][IWL_NUM_SUB_BANDS_V2];
++	u8 enable_ack_reduction;
++	u8 per_chain_restriction_changed;
++	u8 reserved[2];
++	__le32 timer_period;
++	__le32 flags;
++	__le32 tpc_vlp_backoff_level;
++} __packed; /* TX_REDUCED_POWER_API_S_VER_8 */
++
++struct iwl_dev_tx_power_cmd_link_common {
++	__le32 set_mode;
++	__le32 link_id;
++	__le16 pwr_restriction;
++} __packed;
++
++struct iwl_dev_tx_power_cmd_link_v3_v8 {
++	struct iwl_dev_tx_power_cmd_link_common common;
++	struct iwl_dev_tx_power_cmd_per_band per_band;
++	union {
++		struct iwl_dev_tx_power_cmd_v3 v3;
++		struct iwl_dev_tx_power_cmd_v4 v4;
++		struct iwl_dev_tx_power_cmd_v5 v5;
++		struct iwl_dev_tx_power_cmd_v8 v8;
++	};
++} __packed;
++
++struct iwl_dev_tx_power_cmd_v9 {
++	__le16 reserved;
++	__le16 per_chain[IWL_NUM_CHAIN_LIMITS][IWL_NUM_SUB_BANDS_V1];
++	u8 per_chain_restriction_changed;
++	u8 reserved1[3];
++	__le32 timer_period;
++} __packed; /* TX_REDUCED_POWER_API_S_VER_9 */
++
++struct iwl_dev_tx_power_cmd_v10 {
++	__le16 per_chain[IWL_NUM_CHAIN_TABLES_V2][IWL_NUM_CHAIN_LIMITS][IWL_NUM_SUB_BANDS_V2];
++	u8 per_chain_restriction_changed;
++	u8 reserved;
++	__le32 timer_period;
++	__le32 flags;
++} __packed; /* TX_REDUCED_POWER_API_S_VER_10 */
++
++struct iwl_dev_tx_power_cmd_link_v9_v10 {
++	struct iwl_dev_tx_power_cmd_link_common common;
++	union {
++		struct iwl_dev_tx_power_cmd_v9 v9;
++		struct iwl_dev_tx_power_cmd_v10 v10;
++	};
++} __packed;
++
+ #define IWL_NUM_GEO_PROFILES		3
+ #define IWL_NUM_GEO_PROFILES_V3		8
+ #define IWL_NUM_BANDS_PER_CHAIN_V1	2
+diff --git a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/coex.c b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/coex.c
+index 5d1a588..1ed398f 100644
+--- a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/coex.c
++++ b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/coex.c
+@@ -459,6 +459,11 @@ static void iwl_mvm_bt_coex_notif_handle(struct iwl_mvm *mvm)
+ 					mvm->hw, IEEE80211_IFACE_ITER_NORMAL,
+ 					iwl_mvm_bt_notif_iterator, &data);
+ 
++	if (mvm->trans->trans_cfg->device_family >= IWL_DEVICE_FAMILY_AX210) {
++		rcu_read_unlock();
++		return;
++	}
++
+ 	iwl_mvm_bt_coex_tcm_based_ci(mvm, &data);
+ 
+ 	if (data.primary) {
+diff --git a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/fw.c b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/fw.c
+index 3c5ee97..90c0dc7 100644
+--- a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/fw.c
++++ b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/fw.c
+@@ -440,15 +440,15 @@ static int iwl_mvm_load_ucode_wait_alive(struct iwl_mvm *mvm,
+ 
+ 	iwl_mei_alive_notif(!ret);
+ 
+-	ret = iwl_pnvm_load(mvm->trans, &mvm->notif_wait);
++	iwl_trans_fw_alive(mvm->trans, alive_data.scd_base_addr);
++
++	ret = iwl_pnvm_load(mvm->trans, &mvm->notif_wait, mvm->fw);
+ 	if (ret) {
+ 		IWL_ERR(mvm, "Timeout waiting for PNVM load!\n");
+ 		iwl_fw_set_current_image(&mvm->fwrt, old_type);
+ 		return ret;
+ 	}
+ 
+-	iwl_trans_fw_alive(mvm->trans, alive_data.scd_base_addr);
+-
+ 	/*
+ 	 * Note: all the queues are enabled as part of the interface
+ 	 * initialization, but in firmware restart scenarios they
+@@ -715,6 +715,7 @@ static int iwl_run_unified_mvm_ucode(struct iwl_mvm *mvm)
+ 	static const u16 init_complete[] = {
+ 		INIT_COMPLETE_NOTIF,
+ 	};
++	u8 init_cfg_cmd_ver, nvm_complete_cmd_ver, phy_cfg_cmd_ver;
+ 	int ret;
+ 
+ 	if (mvm->trans->cfg->tx_with_siso_diversity)
+@@ -724,6 +725,22 @@ static int iwl_run_unified_mvm_ucode(struct iwl_mvm *mvm)
+ 
+ 	mvm->rfkill_safe_init_done = false;
+ 
++	init_cfg_cmd_ver = iwl_fw_lookup_cmd_ver(mvm->fw,
++					 WIDE_ID(SYSTEM_GROUP,
++						 INIT_EXTENDED_CFG_CMD),
++					 IWL_FW_CMD_VER_UNKNOWN);
++	nvm_complete_cmd_ver = iwl_fw_lookup_cmd_ver(mvm->fw,
++					     WIDE_ID(REGULATORY_AND_NVM_GROUP,
++						     NVM_ACCESS_COMPLETE),
++					     IWL_FW_CMD_VER_UNKNOWN);
++	phy_cfg_cmd_ver = iwl_fw_lookup_cmd_ver(mvm->fw, PHY_CONFIGURATION_CMD,
++						IWL_FW_CMD_VER_UNKNOWN);
++
++	IWL_INFO(mvm,
++		 "unified init start: mld_api=%d init_cfg_ver=%u nvm_complete_ver=%u phy_cfg_ver=%u\n",
++		 mvm->mld_api_is_used, init_cfg_cmd_ver, nvm_complete_cmd_ver,
++		 phy_cfg_cmd_ver);
++
+ 	iwl_init_notification_wait(&mvm->notif_wait,
+ 				   &init_wait,
+ 				   init_complete,
+@@ -731,7 +748,10 @@ static int iwl_run_unified_mvm_ucode(struct iwl_mvm *mvm)
+ 				   iwl_wait_init_complete,
+ 				   NULL);
+ 
+-	iwl_dbg_tlv_time_point(&mvm->fwrt, IWL_FW_INI_TIME_POINT_EARLY, NULL);
++	if (mvm->trans->trans_cfg->device_family < IWL_DEVICE_FAMILY_BZ)
++		iwl_dbg_tlv_time_point(&mvm->fwrt, IWL_FW_INI_TIME_POINT_EARLY, NULL);
++	else
++		IWL_INFO(mvm, "unified init: skipping EARLY dbg_tlv time point on BZ test path\n");
+ 
+ 	/* Will also start the device */
+ 	ret = iwl_mvm_load_ucode_wait_alive(mvm, IWL_UCODE_REGULAR);
+@@ -739,8 +759,12 @@ static int iwl_run_unified_mvm_ucode(struct iwl_mvm *mvm)
+ 		IWL_ERR(mvm, "Failed to start RT ucode: %d\n", ret);
+ 		goto error;
+ 	}
+-	iwl_dbg_tlv_time_point(&mvm->fwrt, IWL_FW_INI_TIME_POINT_AFTER_ALIVE,
++	IWL_INFO(mvm, "unified init: firmware alive, sending init commands\n");
++	if (mvm->trans->trans_cfg->device_family < IWL_DEVICE_FAMILY_BZ)
++		iwl_dbg_tlv_time_point(&mvm->fwrt, IWL_FW_INI_TIME_POINT_AFTER_ALIVE,
+ 			       NULL);
++	else
++		IWL_INFO(mvm, "unified init: skipping AFTER_ALIVE dbg_tlv time point on BZ test path\n");
+ 
+ 	/* Send init config command to mark that we are sending NVM access
+ 	 * commands
+@@ -754,6 +778,7 @@ static int iwl_run_unified_mvm_ucode(struct iwl_mvm *mvm)
+ 			ret);
+ 		goto error;
+ 	}
++	IWL_INFO(mvm, "unified init: INIT_EXTENDED_CFG_CMD sent\n");
+ 
+ 	/* Load NVM to NIC if needed */
+ 	if (mvm->nvm_file_name) {
+@@ -783,6 +808,7 @@ static int iwl_run_unified_mvm_ucode(struct iwl_mvm *mvm)
+ 			ret);
+ 		goto error;
+ 	}
++	IWL_INFO(mvm, "unified init: NVM_ACCESS_COMPLETE sent\n");
+ 
+ 	ret = iwl_send_phy_cfg_cmd(mvm);
+ 	if (ret) {
+@@ -790,12 +816,19 @@ static int iwl_run_unified_mvm_ucode(struct iwl_mvm *mvm)
+ 			ret);
+ 		goto error;
+ 	}
++	IWL_INFO(mvm,
++		 "unified init: PHY_CONFIGURATION_CMD sent, waiting INIT_COMPLETE\n");
+ 
+ 	/* We wait for the INIT complete notification */
+ 	ret = iwl_wait_notification(&mvm->notif_wait, &init_wait,
+ 				    MVM_UCODE_ALIVE_TIMEOUT);
+-	if (ret)
++	if (ret) {
++		IWL_ERR(mvm, "unified init: INIT_COMPLETE wait failed: %d\n",
++			ret);
+ 		return ret;
++	}
++
++	IWL_INFO(mvm, "unified init: INIT_COMPLETE received\n");
+ 
+ 	/* Read the NVM only at driver load time, no need to do this twice */
+ 	if (!IWL_MVM_PARSE_NVM && !mvm->nvm_data) {
+@@ -809,6 +842,7 @@ static int iwl_run_unified_mvm_ucode(struct iwl_mvm *mvm)
+ 	}
+ 
+ 	mvm->rfkill_safe_init_done = true;
++	IWL_INFO(mvm, "unified init finished successfully\n");
+ 
+ 	return 0;
+ 
+@@ -962,43 +996,74 @@ static int iwl_mvm_config_ltr(struct iwl_mvm *mvm)
+ int iwl_mvm_sar_select_profile(struct iwl_mvm *mvm, int prof_a, int prof_b)
+ {
+ 	u32 cmd_id = REDUCE_TX_POWER_CMD;
+-	struct iwl_dev_tx_power_cmd cmd = {
++	struct iwl_dev_tx_power_cmd legacy_cmd = {
++		.common.set_mode = cpu_to_le32(IWL_TX_POWER_MODE_SET_CHAINS),
++	};
++	struct iwl_dev_tx_power_cmd_link_v3_v8 cmd = {
+ 		.common.set_mode = cpu_to_le32(IWL_TX_POWER_MODE_SET_CHAINS),
+ 	};
++	struct iwl_dev_tx_power_cmd_link_v9_v10 cmd_v9_v10 = {
++		.common.set_mode = cpu_to_le32(IWL_TX_POWER_MODE_SET_CHAINS),
++	};
++	void *cmd_data = &cmd;
+ 	__le16 *per_chain;
+ 	int ret;
+ 	u16 len = 0;
+ 	u32 n_subbands;
+-	u8 cmd_ver = iwl_fw_lookup_cmd_ver(mvm->fw, cmd_id,
+-					   IWL_FW_CMD_VER_UNKNOWN);
+-	if (cmd_ver == 7) {
+-		len = sizeof(cmd.v7);
++	u8 cmd_ver = iwl_fw_lookup_cmd_ver(mvm->fw, cmd_id, 3);
++
++	if (cmd_ver == 10) {
++		len = sizeof(cmd_v9_v10.v10);
+ 		n_subbands = IWL_NUM_SUB_BANDS_V2;
+-		per_chain = cmd.v7.per_chain[0][0];
+-		cmd.v7.flags = cpu_to_le32(mvm->fwrt.reduced_power_flags);
++		per_chain = &cmd_v9_v10.v10.per_chain[0][0][0];
++		cmd_v9_v10.v10.flags =
++			cpu_to_le32(mvm->fwrt.reduced_power_flags);
++		cmd_data = &cmd_v9_v10;
++		len += sizeof(cmd_v9_v10.common);
++	} else if (cmd_ver == 9) {
++		len = sizeof(cmd_v9_v10.v9);
++		n_subbands = IWL_NUM_SUB_BANDS_V1;
++		per_chain = &cmd_v9_v10.v9.per_chain[0][0];
++		cmd_data = &cmd_v9_v10;
++		len += sizeof(cmd_v9_v10.common);
++	} else if (cmd_ver == 8) {
++		len = sizeof(cmd.v8);
++		n_subbands = IWL_NUM_SUB_BANDS_V2;
++		per_chain = cmd.v8.per_chain[0][0];
++		cmd.v8.flags = cpu_to_le32(mvm->fwrt.reduced_power_flags);
++		len += sizeof(cmd.common) + sizeof(cmd.per_band);
++	} else if (cmd_ver == 7) {
++		len = sizeof(legacy_cmd.v7);
++		n_subbands = IWL_NUM_SUB_BANDS_V2;
++		per_chain = legacy_cmd.v7.per_chain[0][0];
++		legacy_cmd.v7.flags = cpu_to_le32(mvm->fwrt.reduced_power_flags);
++		cmd_data = &legacy_cmd;
++		len += sizeof(legacy_cmd.common);
+ 	} else if (cmd_ver == 6) {
+-		len = sizeof(cmd.v6);
++		len = sizeof(legacy_cmd.v6);
+ 		n_subbands = IWL_NUM_SUB_BANDS_V2;
+-		per_chain = cmd.v6.per_chain[0][0];
++		per_chain = legacy_cmd.v6.per_chain[0][0];
++		cmd_data = &legacy_cmd;
++		len += sizeof(legacy_cmd.common);
+ 	} else if (fw_has_api(&mvm->fw->ucode_capa,
+ 			      IWL_UCODE_TLV_API_REDUCE_TX_POWER)) {
+ 		len = sizeof(cmd.v5);
+ 		n_subbands = IWL_NUM_SUB_BANDS_V1;
+ 		per_chain = cmd.v5.per_chain[0][0];
++		len += sizeof(cmd.common) + sizeof(cmd.per_band);
+ 	} else if (fw_has_capa(&mvm->fw->ucode_capa,
+ 			       IWL_UCODE_TLV_CAPA_TX_POWER_ACK)) {
+ 		len = sizeof(cmd.v4);
+ 		n_subbands = IWL_NUM_SUB_BANDS_V1;
+ 		per_chain = cmd.v4.per_chain[0][0];
++		len += sizeof(cmd.common) + sizeof(cmd.per_band);
+ 	} else {
+ 		len = sizeof(cmd.v3);
+ 		n_subbands = IWL_NUM_SUB_BANDS_V1;
+ 		per_chain = cmd.v3.per_chain[0][0];
++		len += sizeof(cmd.common) + sizeof(cmd.per_band);
+ 	}
+ 
+-	/* all structs have the same common part, add it */
+-	len += sizeof(cmd.common);
+-
+ 	ret = iwl_sar_select_profile(&mvm->fwrt, per_chain,
+ 				     IWL_NUM_CHAIN_TABLES,
+ 				     n_subbands, prof_a, prof_b);
+@@ -1010,7 +1075,7 @@ int iwl_mvm_sar_select_profile(struct iwl_mvm *mvm, int prof_a, int prof_b)
+ 	iwl_mei_set_power_limit(per_chain);
+ 
+ 	IWL_DEBUG_RADIO(mvm, "Sending REDUCE_TX_POWER_CMD per chain\n");
+-	return iwl_mvm_send_cmd_pdu(mvm, cmd_id, 0, len, &cmd);
++	return iwl_mvm_send_cmd_pdu(mvm, cmd_id, 0, len, cmd_data);
+ }
+ 
+ int iwl_mvm_get_sar_geo_profile(struct iwl_mvm *mvm)
+@@ -1336,11 +1401,34 @@ static u8 iwl_mvm_eval_dsm_rfi(struct iwl_mvm *mvm)
+ 	return DSM_VALUE_RFI_DISABLE;
+ }
+ 
++static size_t iwl_mvm_get_lari_config_cmd_size(u8 cmd_ver)
++{
++	switch (cmd_ver) {
++	case 12:
++		return sizeof(struct iwl_lari_config_change_cmd_v12);
++	case 8:
++		return sizeof(struct iwl_lari_config_change_cmd_v8);
++	case 6:
++		return sizeof(struct iwl_lari_config_change_cmd_v6);
++	case 5:
++		return sizeof(struct iwl_lari_config_change_cmd_v5);
++	case 4:
++		return sizeof(struct iwl_lari_config_change_cmd_v4);
++	case 3:
++		return sizeof(struct iwl_lari_config_change_cmd_v3);
++	case 2:
++		return sizeof(struct iwl_lari_config_change_cmd_v2);
++	default:
++		return sizeof(struct iwl_lari_config_change_cmd_v1);
++	}
++}
++
+ static void iwl_mvm_lari_cfg(struct iwl_mvm *mvm)
+ {
+ 	int ret;
+ 	u32 value;
+-	struct iwl_lari_config_change_cmd_v6 cmd = {};
++	u8 cmd_ver;
++	struct iwl_lari_config_change_cmd_v12 cmd = {};
+ 
+ 	cmd.config_bitmap = iwl_acpi_get_lari_config_bitmap(&mvm->fwrt);
+ 
+@@ -1380,30 +1468,17 @@ static void iwl_mvm_lari_cfg(struct iwl_mvm *mvm)
+ 	    cmd.chan_state_active_bitmap ||
+ 	    cmd.force_disable_channels_bitmap) {
+ 		size_t cmd_size;
+-		u8 cmd_ver = iwl_fw_lookup_cmd_ver(mvm->fw,
+-						   WIDE_ID(REGULATORY_AND_NVM_GROUP,
+-							   LARI_CONFIG_CHANGE),
+-						   1);
+-		switch (cmd_ver) {
+-		case 6:
+-			cmd_size = sizeof(struct iwl_lari_config_change_cmd_v6);
+-			break;
+-		case 5:
+-			cmd_size = sizeof(struct iwl_lari_config_change_cmd_v5);
+-			break;
+-		case 4:
+-			cmd_size = sizeof(struct iwl_lari_config_change_cmd_v4);
+-			break;
+-		case 3:
+-			cmd_size = sizeof(struct iwl_lari_config_change_cmd_v3);
+-			break;
+-		case 2:
+-			cmd_size = sizeof(struct iwl_lari_config_change_cmd_v2);
+-			break;
+-		default:
+-			cmd_size = sizeof(struct iwl_lari_config_change_cmd_v1);
+-			break;
+-		}
++
++		cmd_ver = iwl_fw_lookup_cmd_ver(mvm->fw,
++						WIDE_ID(REGULATORY_AND_NVM_GROUP,
++							LARI_CONFIG_CHANGE),
++						1);
++		if (cmd_ver >= 12)
++			cmd_ver = 12;
++		else if (cmd_ver >= 8)
++			cmd_ver = 8;
++
++		cmd_size = iwl_mvm_get_lari_config_cmd_size(cmd_ver);
+ 
+ 		IWL_DEBUG_RADIO(mvm,
+ 				"sending LARI_CONFIG_CHANGE, config_bitmap=0x%x, oem_11ax_allow_bitmap=0x%x\n",
+@@ -1761,7 +1836,7 @@ int iwl_mvm_up(struct iwl_mvm *mvm)
+ 	 * internal aux station for all aux activities that don't
+ 	 * requires a dedicated data queue.
+ 	 */
+-	if (iwl_fw_lookup_cmd_ver(mvm->fw, ADD_STA, 0) < 12) {
++	if (!iwl_mvm_has_new_station_api(mvm->fw)) {
+ 		 /*
+ 		  * In old version the aux station uses mac id like other
+ 		  * station and not lmac id
+@@ -1971,7 +2046,7 @@ int iwl_mvm_load_d3_fw(struct iwl_mvm *mvm)
+ 		RCU_INIT_POINTER(mvm->fw_id_to_link_sta[i], NULL);
+ 	}
+ 
+-	if (iwl_fw_lookup_cmd_ver(mvm->fw, ADD_STA, 0) < 12) {
++	if (!iwl_mvm_has_new_station_api(mvm->fw)) {
+ 		/*
+ 		 * Add auxiliary station for scanning.
+ 		 * Newer versions of this command implies that the fw uses
+diff --git a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/link.c b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/link.c
+index 5a4494a..f117740 100644
+--- a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/link.c
++++ b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/link.c
+@@ -73,6 +73,7 @@ int iwl_mvm_add_link(struct iwl_mvm *mvm, struct ieee80211_vif *vif,
+ 
+ 	cmd.link_id = cpu_to_le32(link_info->fw_link_id);
+ 	cmd.mac_id = cpu_to_le32(mvmvif->id);
++	cmd.spec_link_id = link_conf->link_id;
+ 	/* P2P-Device already has a valid PHY context during add */
+ 	phyctxt = link_info->phy_ctxt;
+ 	if (phyctxt)
+@@ -85,6 +86,7 @@ int iwl_mvm_add_link(struct iwl_mvm *mvm, struct ieee80211_vif *vif,
+ 	if (vif->type == NL80211_IFTYPE_ADHOC && link_conf->bssid)
+ 		memcpy(cmd.ibss_bssid_addr, link_conf->bssid, ETH_ALEN);
+ 
++
+ 	return iwl_mvm_link_cmd_send(mvm, &cmd, FW_CTXT_ACTION_ADD);
+ }
+ 
+@@ -99,6 +101,8 @@ int iwl_mvm_link_changed(struct iwl_mvm *mvm, struct ieee80211_vif *vif,
+ 	struct iwl_link_config_cmd cmd = {};
+ 	u32 ht_flag, flags = 0, flags_mask = 0;
+ 	int ret;
++	unsigned int cmd_id = WIDE_ID(MAC_CONF_GROUP, LINK_CONFIG_CMD);
++	u8 cmd_ver = iwl_fw_lookup_cmd_ver(mvm->fw, cmd_id, 1);
+ 
+ 	if (WARN_ON_ONCE(!link_info ||
+ 			 link_info->fw_link_id == IWL_MVM_FW_LINK_ID_INVALID))
+@@ -208,7 +212,10 @@ int iwl_mvm_link_changed(struct iwl_mvm *mvm, struct ieee80211_vif *vif,
+ 		flags_mask |= LINK_FLG_MU_EDCA_CW;
+ 	}
+ 
+-	if (link_conf->eht_puncturing && !iwlwifi_mod_params.disable_11be)
++	if (iwl_fw_lookup_cmd_ver(mvm->fw, PHY_CONTEXT_CMD, 1) >= 6 ||
++	    iwlwifi_mod_params.disable_11be || !link_conf->eht_support)
++		changes &= ~LINK_CONTEXT_MODIFY_EHT_PARAMS;
++	else if (link_conf->eht_puncturing)
+ 		cmd.puncture_mask = cpu_to_le16(link_conf->eht_puncturing);
+ 	else
+ 		/* This flag can be set only if the MAC has eht support */
+@@ -238,7 +245,9 @@ int iwl_mvm_link_changed(struct iwl_mvm *mvm, struct ieee80211_vif *vif,
+ send_cmd:
+ 	cmd.modify_mask = cpu_to_le32(changes);
+ 	cmd.flags = cpu_to_le32(flags);
+-	cmd.flags_mask = cpu_to_le32(flags_mask);
++	if (cmd_ver < 6)
++		cmd.flags_mask = cpu_to_le32(flags_mask);
++	cmd.spec_link_id = link_conf->link_id;
+ 
+ 	ret = iwl_mvm_link_cmd_send(mvm, &cmd, FW_CTXT_ACTION_MODIFY);
+ 	if (!ret && (changes & LINK_CONTEXT_MODIFY_ACTIVE))
+@@ -263,6 +272,8 @@ int iwl_mvm_remove_link(struct iwl_mvm *mvm, struct ieee80211_vif *vif,
+ 	cmd.link_id = cpu_to_le32(link_info->fw_link_id);
+ 	iwl_mvm_release_fw_link_id(mvm, link_info->fw_link_id);
+ 	link_info->fw_link_id = IWL_MVM_FW_LINK_ID_INVALID;
++	cmd.spec_link_id = link_conf->link_id;
++	cmd.phy_id = cpu_to_le32(FW_CTXT_INVALID);
+ 
+ 	ret = iwl_mvm_link_cmd_send(mvm, &cmd, FW_CTXT_ACTION_REMOVE);
+ 
+diff --git a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/mac80211.c b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/mac80211.c
+index 32f813b..31a2255 100644
+--- a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/mac80211.c
++++ b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/mac80211.c
+@@ -147,7 +147,7 @@ struct ieee80211_regdomain *iwl_mvm_get_regdomain(struct wiphy *wiphy,
+ 	struct ieee80211_regdomain *regd = NULL;
+ 	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
+ 	struct iwl_mvm *mvm = IWL_MAC80211_GET_MVM(hw);
+-	struct iwl_mcc_update_resp *resp;
++	struct iwl_mcc_update_resp_v8 *resp;
+ 	u8 resp_ver;
+ 
+ 	IWL_DEBUG_LAR(mvm, "Getting regdomain data for %s from FW\n", alpha2);
+@@ -177,7 +177,7 @@ struct ieee80211_regdomain *iwl_mvm_get_regdomain(struct wiphy *wiphy,
+ 				      resp->channels,
+ 				      __le16_to_cpu(resp->mcc),
+ 				      __le16_to_cpu(resp->geo_info),
+-				      __le16_to_cpu(resp->cap), resp_ver);
++				      __le32_to_cpu(resp->cap), resp_ver);
+ 	/* Store the return source id */
+ 	src_id = resp->source_id;
+ 	if (IS_ERR_OR_NULL(regd)) {
+@@ -1327,7 +1327,7 @@ void __iwl_mvm_mac_stop(struct iwl_mvm *mvm)
+ 
+ 	/* async_handlers_wk is now blocked */
+ 
+-	if (iwl_fw_lookup_cmd_ver(mvm->fw, ADD_STA, 0) < 12)
++	if (!iwl_mvm_has_new_station_api(mvm->fw))
+ 		iwl_mvm_rm_aux_sta(mvm);
+ 
+ 	iwl_mvm_stop_device(mvm);
+@@ -1417,27 +1417,58 @@ struct iwl_mvm_phy_ctxt *iwl_mvm_get_free_phy_ctxt(struct iwl_mvm *mvm)
+ }
+ 
+ int iwl_mvm_set_tx_power(struct iwl_mvm *mvm, struct ieee80211_vif *vif,
+-			 s16 tx_power)
++			 struct ieee80211_bss_conf *link_conf, s16 tx_power)
+ {
+ 	u32 cmd_id = REDUCE_TX_POWER_CMD;
++	struct iwl_mvm_vif *mvmvif = iwl_mvm_vif_from_mac80211(vif);
++	u32 mac_id = mvmvif->id;
+ 	int len;
+-	struct iwl_dev_tx_power_cmd cmd = {
+-		.common.set_mode = cpu_to_le32(IWL_TX_POWER_MODE_SET_MAC),
+-		.common.mac_context_id =
+-			cpu_to_le32(iwl_mvm_vif_from_mac80211(vif)->id),
+-		.common.pwr_restriction = cpu_to_le16(8 * tx_power),
++	u16 u_tx_power = tx_power == IWL_DEFAULT_MAX_TX_POWER ?
++		IWL_DEV_MAX_TX_POWER : 8 * tx_power;
++	struct iwl_dev_tx_power_cmd legacy_cmd = {
++		.common.set_mode = cpu_to_le32(IWL_TX_POWER_MODE_SET_LINK),
++		.common.mac_context_id = cpu_to_le32(mac_id),
++		.common.pwr_restriction = cpu_to_le16(u_tx_power),
+ 	};
+-	u8 cmd_ver = iwl_fw_lookup_cmd_ver(mvm->fw, cmd_id,
+-					   IWL_FW_CMD_VER_UNKNOWN);
+-
+-	if (tx_power == IWL_DEFAULT_MAX_TX_POWER)
+-		cmd.common.pwr_restriction = cpu_to_le16(IWL_DEV_MAX_TX_POWER);
+-
+-	if (cmd_ver == 7)
+-		len = sizeof(cmd.v7);
+-	else if (cmd_ver == 6)
+-		len = sizeof(cmd.v6);
+-	else if (fw_has_api(&mvm->fw->ucode_capa,
++	struct iwl_dev_tx_power_cmd_link_v3_v8 cmd = {
++		.common.set_mode = cpu_to_le32(IWL_TX_POWER_MODE_SET_LINK),
++		.common.link_id = cpu_to_le32(mac_id),
++		.common.pwr_restriction = cpu_to_le16(u_tx_power),
++	};
++	struct iwl_dev_tx_power_cmd_link_v9_v10 cmd_v9_v10 = {};
++	void *cmd_data = &cmd;
++	u8 cmd_ver = iwl_fw_lookup_cmd_ver(mvm->fw, cmd_id, 3);
++
++	if (cmd_ver > 8) {
++		struct iwl_mvm_vif_link_info *link_info;
++		u32 fw_link_id;
++
++		link_info = mvmvif->link[link_conf->link_id];
++		if (WARN_ON(!link_info ||
++			    link_info->fw_link_id == IWL_MVM_FW_LINK_ID_INVALID))
++			return -ENODEV;
++
++		fw_link_id = link_info->fw_link_id;
++		cmd_v9_v10.common.set_mode =
++			cpu_to_le32(IWL_TX_POWER_MODE_SET_LINK);
++		cmd_v9_v10.common.link_id = cpu_to_le32(fw_link_id);
++		cmd_v9_v10.common.pwr_restriction = cpu_to_le16(u_tx_power);
++		cmd_data = &cmd_v9_v10;
++	}
++
++	if (cmd_ver == 10)
++		len = sizeof(cmd_v9_v10.v10);
++	else if (cmd_ver == 9)
++		len = sizeof(cmd_v9_v10.v9);
++	else if (cmd_ver == 8)
++		len = sizeof(cmd.v8);
++	else if (cmd_ver == 7) {
++		len = sizeof(legacy_cmd.v7);
++		cmd_data = &legacy_cmd;
++	} else if (cmd_ver == 6) {
++		len = sizeof(legacy_cmd.v6);
++		cmd_data = &legacy_cmd;
++	} else if (fw_has_api(&mvm->fw->ucode_capa,
+ 			    IWL_UCODE_TLV_API_REDUCE_TX_POWER))
+ 		len = sizeof(cmd.v5);
+ 	else if (fw_has_capa(&mvm->fw->ucode_capa,
+@@ -1446,10 +1477,14 @@ int iwl_mvm_set_tx_power(struct iwl_mvm *mvm, struct ieee80211_vif *vif,
+ 	else
+ 		len = sizeof(cmd.v3);
+ 
+-	/* all structs have the same common part, add it */
+-	len += sizeof(cmd.common);
++	if (cmd_ver > 8)
++		len += sizeof(cmd_v9_v10.common);
++	else if (cmd_ver == 7 || cmd_ver == 6)
++		len += sizeof(legacy_cmd.common);
++	else
++		len += sizeof(cmd.common) + sizeof(cmd.per_band);
+ 
+-	return iwl_mvm_send_cmd_pdu(mvm, cmd_id, 0, len, &cmd);
++	return iwl_mvm_send_cmd_pdu(mvm, cmd_id, 0, len, cmd_data);
+ }
+ 
+ int iwl_mvm_post_channel_switch(struct ieee80211_hw *hw,
+@@ -3271,7 +3306,7 @@ iwl_mvm_bss_info_changed_common(struct ieee80211_hw *hw,
+ 	if (changes & BSS_CHANGED_TXPOWER) {
+ 		IWL_DEBUG_CALIB(mvm, "Changing TX Power to %d dBm\n",
+ 				bss_conf->txpower);
+-		iwl_mvm_set_tx_power(mvm, vif, bss_conf->txpower);
++		iwl_mvm_set_tx_power(mvm, vif, bss_conf, bss_conf->txpower);
+ 	}
+ 
+ 	mutex_unlock(&mvm->mutex);
+@@ -4728,7 +4763,7 @@ static int iwl_mvm_add_aux_sta_for_hs20(struct iwl_mvm *mvm, u32 lmac_id)
+ 		return -EINVAL;
+ 	}
+ 
+-	if (iwl_fw_lookup_cmd_ver(mvm->fw, ADD_STA, 0) >= 12) {
++	if (iwl_mvm_has_new_station_api(mvm->fw)) {
+ 		ret = iwl_mvm_add_aux_sta(mvm, lmac_id);
+ 		WARN(ret, "Failed to allocate aux station");
+ 	}
+diff --git a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/mld-mac.c b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/mld-mac.c
+index c4d5419..653cca6 100644
+--- a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/mld-mac.c
++++ b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/mld-mac.c
+@@ -5,46 +5,60 @@
+ #include "mvm.h"
+ 
+ static void iwl_mvm_mld_set_he_support(struct iwl_mvm *mvm,
+-				       struct ieee80211_vif *vif,
+-				       struct iwl_mac_config_cmd *cmd)
++			       struct ieee80211_vif *vif,
++			       struct iwl_mac_config_cmd *cmd,
++			       int cmd_ver)
+ {
+ #ifdef CPTCFG_IWLMVM_AX_SOFTAP_TESTMODE
+ 	if (vif->type == NL80211_IFTYPE_AP &&
+ 	    fw_has_capa(&mvm->fw->ucode_capa,
+ 			IWL_UCODE_TLV_CAPA_AX_SAP_TM_V2)) {
+-		cmd->he_support = cpu_to_le16(1);
++		if (cmd_ver == 2)
++			cmd->wifi_gen_v2.he_support = cpu_to_le16(1);
++		else
++			cmd->wifi_gen.he_support = 1;
+ 		return;
+ 	}
+ #endif
+ 
+-	if (vif->type == NL80211_IFTYPE_AP)
+-		cmd->he_ap_support = cpu_to_le16(1);
+-	else
+-		cmd->he_support = cpu_to_le16(1);
++	if (vif->type == NL80211_IFTYPE_AP) {
++		if (cmd_ver == 2)
++			cmd->wifi_gen_v2.he_ap_support = cpu_to_le16(1);
++		else
++			cmd->wifi_gen.he_ap_support = 1;
++	} else {
++		if (cmd_ver == 2)
++			cmd->wifi_gen_v2.he_support = cpu_to_le16(1);
++		else
++			cmd->wifi_gen.he_support = 1;
++	}
+ }
+ 
+ static void iwl_mvm_mld_mac_ctxt_cmd_common(struct iwl_mvm *mvm,
+-					    struct ieee80211_vif *vif,
+-					    struct iwl_mac_config_cmd *cmd,
+-					    u32 action)
++				    struct ieee80211_vif *vif,
++				    struct iwl_mac_config_cmd *cmd,
++				    u32 action)
+ {
+ 	struct iwl_mvm_vif *mvmvif = iwl_mvm_vif_from_mac80211(vif);
+ 	struct ieee80211_bss_conf *link_conf;
+ 	unsigned int link_id;
++	int cmd_ver = iwl_fw_lookup_cmd_ver(mvm->fw,
++				    WIDE_ID(MAC_CONF_GROUP, MAC_CONFIG_CMD), 1);
++
++	if (WARN_ON(cmd_ver > 3))
++		return;
+ 
+ 	cmd->id_and_color = cpu_to_le32(mvmvif->id);
+ 	cmd->action = cpu_to_le32(action);
+-
+ 	cmd->mac_type = cpu_to_le32(iwl_mvm_get_mac_type(vif));
+ 
+ 	memcpy(cmd->local_mld_addr, vif->addr, ETH_ALEN);
+ 
+-	cmd->he_support = 0;
+-	cmd->eht_support = 0;
++	cmd->wifi_gen_v2.he_support = 0;
++	cmd->wifi_gen_v2.eht_support = 0;
+ 
+ 	/* should be set by specific context type handler */
+ 	cmd->filter_flags = 0;
+-
+ 	cmd->nic_not_ack_enabled =
+ 		cpu_to_le32(!iwl_mvm_is_nic_ack_enabled(mvm, vif));
+ 
+@@ -61,8 +75,11 @@ static void iwl_mvm_mld_mac_ctxt_cmd_common(struct iwl_mvm *mvm,
+ 	 * and enable both when we have MLO.
+ 	 */
+ 	if (vif->valid_links) {
+-		iwl_mvm_mld_set_he_support(mvm, vif, cmd);
+-		cmd->eht_support = cpu_to_le32(1);
++		iwl_mvm_mld_set_he_support(mvm, vif, cmd, cmd_ver);
++		if (cmd_ver == 2)
++			cmd->wifi_gen_v2.eht_support = cpu_to_le32(1);
++		else
++			cmd->wifi_gen.eht_support = 1;
+ 		return;
+ 	}
+ 
+@@ -73,7 +90,7 @@ static void iwl_mvm_mld_mac_ctxt_cmd_common(struct iwl_mvm *mvm,
+ 			continue;
+ 
+ 		if (link_conf->he_support)
+-			iwl_mvm_mld_set_he_support(mvm, vif, cmd);
++			iwl_mvm_mld_set_he_support(mvm, vif, cmd, cmd_ver);
+ 
+ 		/* it's not reasonable to have EHT without HE and FW API doesn't
+ 		 * support it. Ignore EHT in this case.
+@@ -82,7 +99,10 @@ static void iwl_mvm_mld_mac_ctxt_cmd_common(struct iwl_mvm *mvm,
+ 			continue;
+ 
+ 		if (link_conf->eht_support) {
+-			cmd->eht_support = cpu_to_le32(1);
++			if (cmd_ver == 2)
++				cmd->wifi_gen_v2.eht_support = cpu_to_le32(1);
++			else
++				cmd->wifi_gen.eht_support = 1;
+ 			break;
+ 		}
+ 	}
+@@ -125,16 +145,16 @@ static int iwl_mvm_mld_mac_ctxt_cmd_sta(struct iwl_mvm *mvm,
+ 	if (vif->cfg.assoc && !force_assoc_off) {
+ 		struct iwl_mvm_vif *mvmvif = iwl_mvm_vif_from_mac80211(vif);
+ 
+-		cmd.client.is_assoc = cpu_to_le32(1);
++		cmd.client.is_assoc = 1;
+ 
+ 		if (!mvmvif->authorized &&
+ 		    fw_has_capa(&mvm->fw->ucode_capa,
+ 				IWL_UCODE_TLV_CAPA_COEX_HIGH_PRIO))
+ 			cmd.client.data_policy |=
+-				cpu_to_le32(COEX_HIGH_PRIORITY_ENABLE);
++				cpu_to_le16(COEX_HIGH_PRIORITY_ENABLE);
+ 
+ 	} else {
+-		cmd.client.is_assoc = cpu_to_le32(0);
++		cmd.client.is_assoc = 0;
+ 
+ 		/* Allow beacons to pass through as long as we are not
+ 		 * associated, or we do not have dtim period information.
+@@ -142,14 +162,14 @@ static int iwl_mvm_mld_mac_ctxt_cmd_sta(struct iwl_mvm *mvm,
+ 		cmd.filter_flags |= cpu_to_le32(MAC_CFG_FILTER_ACCEPT_BEACON);
+ 	}
+ 
+-	cmd.client.assoc_id = cpu_to_le32(vif->cfg.aid);
++	cmd.client.assoc_id = cpu_to_le16(vif->cfg.aid);
+ 
+ 	if (vif->probe_req_reg && vif->cfg.assoc && vif->p2p)
+ 		cmd.filter_flags |= cpu_to_le32(MAC_CFG_FILTER_ACCEPT_PROBE_REQ);
+ 
+ 	if (vif->bss_conf.he_support && !iwlwifi_mod_params.disable_11ax)
+ 		cmd.client.data_policy |=
+-			iwl_mvm_mac_ctxt_cmd_sta_get_twt_policy(mvm, vif);
++			cpu_to_le16(le32_to_cpu(iwl_mvm_mac_ctxt_cmd_sta_get_twt_policy(mvm, vif)));
+ 
+ 	return iwl_mvm_mld_mac_ctxt_send_cmd(mvm, &cmd);
+ }
+diff --git a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/mld-mac80211.c b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/mld-mac80211.c
+index a53d7b8..5c00be0 100644
+--- a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/mld-mac80211.c
++++ b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/mld-mac80211.c
+@@ -747,7 +747,7 @@ static void iwl_mvm_mld_link_info_changed(struct ieee80211_hw *hw,
+ 	if (changes & BSS_CHANGED_TXPOWER) {
+ 		IWL_DEBUG_CALIB(mvm, "Changing TX Power to %d dBm\n",
+ 				link_conf->txpower);
+-		iwl_mvm_set_tx_power(mvm, vif, link_conf->txpower);
++		iwl_mvm_set_tx_power(mvm, vif, link_conf, link_conf->txpower);
+ 	}
+ 
+ 	mutex_unlock(&mvm->mutex);
+diff --git a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/mld-sta.c b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/mld-sta.c
+index 795fa64..3b40c14 100644
+--- a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/mld-sta.c
++++ b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/mld-sta.c
+@@ -45,9 +45,11 @@ u32 iwl_mvm_sta_fw_id_mask(struct iwl_mvm *mvm, struct ieee80211_sta *sta,
+ static int iwl_mvm_mld_send_sta_cmd(struct iwl_mvm *mvm,
+ 				    struct iwl_mvm_sta_cfg_cmd *cmd)
+ {
+-	int ret = iwl_mvm_send_cmd_pdu(mvm,
+-				       WIDE_ID(MAC_CONF_GROUP, STA_CONFIG_CMD),
+-				       0, sizeof(*cmd), cmd);
++	u32 cmd_id = WIDE_ID(MAC_CONF_GROUP, STA_CONFIG_CMD);
++	int cmd_len = iwl_fw_lookup_cmd_ver(mvm->fw, cmd_id, 0) > 1 ?
++		      sizeof(*cmd) :
++		      sizeof(struct iwl_mvm_sta_cfg_cmd_v1);
++	int ret = iwl_mvm_send_cmd_pdu(mvm, cmd_id, 0, cmd_len, cmd);
+ 	if (ret)
+ 		IWL_ERR(mvm, "STA_CONFIG_CMD send failed, ret=0x%x\n", ret);
+ 	return ret;
+@@ -72,6 +74,11 @@ static int iwl_mvm_mld_add_int_sta_to_fw(struct iwl_mvm *mvm,
+ 
+ 	cmd.station_type = cpu_to_le32(sta->type);
+ 
++	if (fw_has_capa(&mvm->fw->ucode_capa,
++			IWL_UCODE_TLV_CAPA_STA_EXP_MFP_SUPPORT) &&
++	    sta->type == STATION_TYPE_BCAST_MGMT)
++		cmd.mfp = cpu_to_le32(1);
++
+ 	if (addr) {
+ 		memcpy(cmd.peer_mld_address, addr, ETH_ALEN);
+ 		memcpy(cmd.peer_link_address, addr, ETH_ALEN);
+@@ -447,6 +454,11 @@ static int iwl_mvm_mld_cfg_sta(struct iwl_mvm *mvm, struct ieee80211_sta *sta,
+ 	if (mvm_sta->sta_state >= IEEE80211_STA_ASSOC)
+ 		cmd.assoc_id = cpu_to_le32(sta->aid);
+ 
++	if (fw_has_capa(&mvm->fw->ucode_capa,
++			IWL_UCODE_TLV_CAPA_STA_EXP_MFP_SUPPORT) &&
++	    (sta->mfp || mvm_sta->sta_state < IEEE80211_STA_AUTHORIZED))
++		cmd.mfp = cpu_to_le32(1);
++
+ 	switch (link_sta->rx_nss) {
+ 	case 1:
+ 		cmd.mimo = cpu_to_le32(0);
+@@ -694,6 +706,8 @@ int iwl_mvm_mld_add_sta(struct iwl_mvm *mvm, struct ieee80211_vif *vif,
+ 
+ 	/* at this stage sta link pointers are already allocated */
+ 	ret = iwl_mvm_mld_update_sta(mvm, vif, sta);
++	if (ret)
++		goto err;
+ 
+ 	for_each_sta_active_link(vif, sta, link_sta, link_id) {
+ 		struct ieee80211_bss_conf *link_conf =
+diff --git a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/mvm.h b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/mvm.h
+index 24aeefc..07bbde6 100644
+--- a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/mvm.h
++++ b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/mvm.h
+@@ -1464,6 +1464,15 @@ static inline bool iwl_mvm_bt_is_rrc_supported(struct iwl_mvm *mvm)
+ 
+ static inline bool iwl_mvm_is_csum_supported(struct iwl_mvm *mvm)
+ {
++	/*
++	 * The GL/BZ generation advertises checksum offload support, but on
++	 * this 5.15 backport the TX datapath still leaves TCP sessions stuck
++	 * in SYN retransmits. Fall back to software checksums there.
++	 */
++	if (mvm->trans->trans_cfg->device_family >= IWL_DEVICE_FAMILY_BZ ||
++	    CSR_HW_REV_TYPE(mvm->trans->hw_rev) == IWL_CFG_MAC_TYPE_GL)
++		return false;
++
+ 	return fw_has_capa(&mvm->fw->ucode_capa,
+ 			   IWL_UCODE_TLV_CAPA_CSUM_SUPPORT) &&
+ 		!IWL_MVM_HW_CSUM_DISABLE;
+@@ -1497,12 +1506,25 @@ static inline bool iwl_mvm_has_mld_api(const struct iwl_fw *fw)
+ 			   IWL_UCODE_TLV_CAPA_MLD_API_SUPPORT);
+ }
+ 
++static inline bool iwl_mvm_has_new_station_api(const struct iwl_fw *fw)
++{
++	return iwl_mvm_has_mld_api(fw) ||
++	       iwl_fw_lookup_cmd_ver(fw, ADD_STA, 0) >= 12;
++}
++
+ static inline bool iwl_mvm_has_new_tx_api(struct iwl_mvm *mvm)
+ {
+ 	/* TODO - replace with TLV once defined */
+ 	return mvm->trans->trans_cfg->use_tfh;
+ }
+ 
++static inline bool iwl_mvm_has_rlc_offload(struct iwl_mvm *mvm)
++{
++	return iwl_fw_lookup_cmd_ver(mvm->fw,
++				     WIDE_ID(DATA_PATH_GROUP, RLC_CONFIG_CMD),
++				     0) >= 3;
++}
++
+ static inline bool iwl_mvm_has_unified_ucode(struct iwl_mvm *mvm)
+ {
+ 	/* TODO - better define this */
+@@ -2293,7 +2315,7 @@ void iwl_mvm_vendor_cmds_register(struct iwl_mvm *mvm);
+ void iwl_mvm_vendor_cmds_unregister(struct iwl_mvm *mvm);
+ 
+ /* Location Aware Regulatory */
+-struct iwl_mcc_update_resp *
++struct iwl_mcc_update_resp_v8 *
+ iwl_mvm_update_mcc(struct iwl_mvm *mvm, const char *alpha2,
+ 		   enum iwl_mcc_source src_id);
+ int iwl_mvm_init_mcc(struct iwl_mvm *mvm);
+@@ -2803,7 +2825,7 @@ bool iwl_mvm_have_links_same_channel(struct iwl_mvm_vif *vif1,
+ 				     struct iwl_mvm_vif *vif2);
+ bool iwl_mvm_vif_is_active(struct iwl_mvm_vif *mvmvif);
+ int iwl_mvm_set_tx_power(struct iwl_mvm *mvm, struct ieee80211_vif *vif,
+-			 s16 tx_power);
++			 struct ieee80211_bss_conf *link_conf, s16 tx_power);
+ int iwl_mvm_set_hw_timestamp(struct ieee80211_hw *hw,
+ 			     struct ieee80211_vif *vif,
+ 			     struct cfg80211_set_hw_timestamp *hwts);
+diff --git a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/nan.c b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/nan.c
+index b0194ff..9c636fe 100644
+--- a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/nan.c
++++ b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/nan.c
+@@ -93,8 +93,8 @@ int iwl_mvm_start_nan(struct ieee80211_hw *hw,
+ 	if (WARN_ON(conf->bands && !(conf->bands & BIT(NL80211_BAND_2GHZ))))
+ 		return -EINVAL;
+ 
+-	/* This function should not be called when using ADD_STA ver >=12 */
+-	WARN_ON_ONCE(iwl_fw_lookup_cmd_ver(mvm->fw, ADD_STA, 0) >= 12);
++	/* This function should not be called when using new station API */
++	WARN_ON_ONCE(iwl_mvm_has_new_station_api(mvm->fw));
+ 
+ 	conf->bands |= BIT(NL80211_BAND_2GHZ);
+ 	cmd = kzalloc(iwl_mvm_nan_cfg_cmd_len(hw), GFP_KERNEL);
+diff --git a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/phy-ctxt.c b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/phy-ctxt.c
+index f42b184..6dcbae1 100644
+--- a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/phy-ctxt.c
++++ b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/phy-ctxt.c
+@@ -161,6 +161,12 @@ static int iwl_mvm_phy_send_rlc(struct iwl_mvm *mvm,
+ 		.phy_id = cpu_to_le32(ctxt->id),
+ 	};
+ 
++	/* From version 3, RLC is offloaded to firmware, so the driver no
++	 * longer needs to send the host RLC command.
++	 */
++	if (iwl_mvm_has_rlc_offload(mvm))
++		return 0;
++
+ 	if (iwl_fw_lookup_cmd_ver(mvm->fw, WIDE_ID(DATA_PATH_GROUP,
+ 						   RLC_CONFIG_CMD), 0) < 2)
+ 		return 0;
+@@ -200,7 +206,7 @@ static int iwl_mvm_phy_ctxt_apply(struct iwl_mvm *mvm,
+ 	int ret;
+ 	int ver = iwl_fw_lookup_cmd_ver(mvm->fw, PHY_CONTEXT_CMD, 1);
+ 
+-	if (ver == 3 || ver == 4) {
++	if (ver >= 3 && ver <= 7) {
+ 		struct iwl_phy_context_cmd cmd = {};
+ 
+ 		/* Set the command header fields */
+diff --git a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/sta.c b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/sta.c
+index 632915b..5883292 100644
+--- a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/sta.c
++++ b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/sta.c
+@@ -1658,7 +1658,7 @@ static int iwl_mvm_add_int_sta_common(struct iwl_mvm *mvm,
+ 	memset(&cmd, 0, sizeof(cmd));
+ 	cmd.sta_id = sta->sta_id;
+ 
+-	if (iwl_fw_lookup_cmd_ver(mvm->fw, ADD_STA, 0) >= 12 &&
++	if (iwl_mvm_has_new_station_api(mvm->fw) &&
+ 	    sta->type == IWL_STA_AUX_ACTIVITY)
+ 		cmd.mac_id_n_color = cpu_to_le32(mac_id);
+ 	else
+diff --git a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/time-event.c b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/time-event.c
+index 6b7b625..b44cac4 100644
+--- a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/time-event.c
++++ b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/time-event.c
+@@ -103,7 +103,7 @@ void iwl_mvm_roc_done_wk(struct work_struct *wk)
+ 		/* In newer version of this command an aux station is added only
+ 		 * in cases of dedicated tx queue and need to be removed in end
+ 		 * of use */
+-		if (iwl_fw_lookup_cmd_ver(mvm->fw, ADD_STA, 0) >= 12)
++		if (iwl_mvm_has_new_station_api(mvm->fw))
+ 			iwl_mvm_rm_aux_sta(mvm);
+ 	}
+ 
+diff --git a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/utils.c b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/utils.c
+index 9670db4..a466003 100644
+--- a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/utils.c
++++ b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/mvm/utils.c
+@@ -344,6 +344,10 @@ static bool iwl_wait_stats_complete(struct iwl_notif_wait_data *notif_wait,
+ 
+ int iwl_mvm_request_statistics(struct iwl_mvm *mvm, bool clear)
+ {
++	/* GL/FM on BZ crashes on legacy STATISTICS_CMD; skip it until SYSTEM_STATISTICS_CMD is backported. */
++	if (mvm->trans->trans_cfg->device_family >= IWL_DEVICE_FAMILY_BZ)
++		return 0;
++
+ 	struct iwl_statistics_cmd scmd = {
+ 		.flags = clear ? cpu_to_le32(IWL_STATISTICS_FLG_CLEAR) : 0,
+ 	};

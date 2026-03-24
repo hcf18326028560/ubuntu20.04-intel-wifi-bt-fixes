@@ -1,0 +1,642 @@
+diff --git a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/fw/api/dbg-tlv.h b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/fw/api/dbg-tlv.h
+index 30bf4e2..d270208 100644
+--- a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/fw/api/dbg-tlv.h
++++ b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/fw/api/dbg-tlv.h
+@@ -385,6 +385,9 @@ enum iwl_fw_ini_region_type {
+ 	IWL_FW_INI_REGION_PCI_IOSF_CONFIG,
+ 	IWL_FW_INI_REGION_SPECIAL_DEVICE_MEMORY,
+ 	IWL_FW_INI_REGION_DBGI_SRAM,
++	IWL_FW_INI_REGION_PERIPHERY_MAC_RANGE,
++	IWL_FW_INI_REGION_PERIPHERY_PHY_RANGE,
++	IWL_FW_INI_REGION_PERIPHERY_SNPS_DPHYIP,
+ 	IWL_FW_INI_REGION_NUM
+ }; /* FW_TLV_DEBUG_REGION_TYPE_API_E */
+ 
+@@ -464,6 +467,11 @@ enum iwl_fw_ini_time_point {
+ 	IWL_FW_INI_TIME_POINT_EAPOL_FAILED,
+ 	IWL_FW_INI_TIME_POINT_FAKE_TX,
+ 	IWL_FW_INI_TIME_POINT_DEASSOC,
++	IWL_FW_INI_TIME_POINT_PRESET_OVERRIDE_EXT_REQ,
++	IWL_FW_INI_TIME_POINT_PRESET_OVERRIDE_START,
++	IWL_FW_INI_TIME_SCAN_FAILURE,
++	IWL_FW_INI_TIME_ESR_LINK_UP,
++	IWL_FW_INI_TIME_ESR_LINK_DOWN,
+ 	IWL_FW_INI_TIME_POINT_NUM,
+ }; /* FW_TLV_DEBUG_TIME_POINT_API_E */
+ 
+diff --git a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/iwl-context-info-gen3.h b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/iwl-context-info-gen3.h
+index 3f72780..d976d98 100644
+--- a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/iwl-context-info-gen3.h
++++ b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/iwl-context-info-gen3.h
+@@ -69,6 +69,7 @@ enum iwl_prph_scratch_flags {
+ 	IWL_PRPH_SCRATCH_RB_SIZE_EXT_8K		= 8 << 20,
+ 	IWL_PRPH_SCRATCH_RB_SIZE_EXT_12K	= 9 << 20,
+ 	IWL_PRPH_SCRATCH_RB_SIZE_EXT_16K	= 10 << 20,
++	IWL_PRPH_SCRATCH_TOP_RESET		= BIT(30),
+ };
+ 
+ /*
+diff --git a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/iwl-csr.h b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/iwl-csr.h
+index 587368a..4eade92 100644
+--- a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/iwl-csr.h
++++ b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/iwl-csr.h
+@@ -92,6 +92,14 @@
+ #define CSR_MAC_SHADOW_REG_CTL2		(CSR_BASE + 0x0AC)
+ #define CSR_MAC_SHADOW_REG_CTL2_RX_WAKE	0xFFFF
+ 
++#define CSR_IPC_STATE		(CSR_BASE + 0x110)
++#define CSR_IPC_STATE_RESET	0x00000030
++#define CSR_IPC_STATE_RESET_NONE		0
++#define CSR_IPC_STATE_RESET_SW_READY		1
++#define CSR_IPC_STATE_RESET_TOP_READY		2
++#define CSR_IPC_STATE_RESET_TOP_FOLLOWER	3
++#define CSR_IPC_STATE_TOP_RESET_REQ		BIT(6)
++
+ /* LTR control (since IWL_DEVICE_FAMILY_22000) */
+ #define CSR_LTR_LONG_VAL_AD			(CSR_BASE + 0x0D4)
+ #define CSR_LTR_LONG_VAL_AD_NO_SNOOP_REQ	0x80000000
+diff --git a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/iwl-dbg-tlv.c b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/iwl-dbg-tlv.c
+index 71a2666..4e0dc5e 100644
+--- a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/iwl-dbg-tlv.c
++++ b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/iwl-dbg-tlv.c
+@@ -601,10 +601,16 @@ static int iwl_dbg_tlv_alloc_fragments(struct iwl_fw_runtime *fwrt,
+ 	fw_mon_cfg = &fwrt->trans->dbg.fw_mon_cfg[alloc_id];
+ 	fw_mon = &fwrt->trans->dbg.fw_mon_ini[alloc_id];
+ 
+-	if (fw_mon->num_frags ||
+-	    fw_mon_cfg->buf_location !=
+-	    cpu_to_le32(IWL_FW_INI_LOCATION_DRAM_PATH))
+-		return 0;
++if (fw_mon->num_frags) {
++for (i = 0; i < fw_mon->num_frags; i++)
++memset(fw_mon->frags[i].block, 0,
++       fw_mon->frags[i].size);
++return 0;
++}
++
++if (fw_mon_cfg->buf_location !=
++    cpu_to_le32(IWL_FW_INI_LOCATION_DRAM_PATH))
++return 0;
+ 
+ 	num_frags = le32_to_cpu(fw_mon_cfg->max_frags_num);
+ 	if (fwrt->trans->trans_cfg->device_family < IWL_DEVICE_FAMILY_AX210) {
+@@ -751,11 +757,13 @@ static int iwl_dbg_tlv_update_dram(struct iwl_fw_runtime *fwrt,
+ 	int j, fw_mon_idx = 0;
+ 	struct iwl_buf_alloc_cmd *data;
+ 
+-	if (le32_to_cpu(fwrt->trans->dbg.fw_mon_cfg[alloc_id].buf_location) !=
+-			IWL_FW_INI_LOCATION_DRAM_PATH) {
+-		IWL_DEBUG_FW(fwrt, "DRAM_PATH is not supported alloc_id %u\n", alloc_id);
+-		return -1;
+-	}
++if (le32_to_cpu(fwrt->trans->dbg.fw_mon_cfg[alloc_id].buf_location) !=
++IWL_FW_INI_LOCATION_DRAM_PATH) {
++IWL_DEBUG_FW(fwrt,
++     "WRT: alloc_id %u location is not in DRAM_PATH\n",
++     alloc_id);
++return -1;
++}
+ 
+ 	fw_mon = &fwrt->trans->dbg.fw_mon_ini[alloc_id];
+ 
+@@ -809,25 +817,27 @@ static void iwl_dbg_tlv_update_drams(struct iwl_fw_runtime *fwrt)
+ 			 IWL_UCODE_TLV_CAPA_DRAM_FRAG_SUPPORT))
+ 		return;
+ 
+-	dram_info->first_word = cpu_to_le32(DRAM_INFO_FIRST_MAGIC_WORD);
+-	dram_info->second_word = cpu_to_le32(DRAM_INFO_SECOND_MAGIC_WORD);
+-
+-	for (i = IWL_FW_INI_ALLOCATION_ID_DBGC1;
+-	     i < IWL_FW_INI_ALLOCATION_NUM; i++) {
+-		ret = iwl_dbg_tlv_update_dram(fwrt, i, dram_info);
+-		if (!ret)
+-			dram_alloc = true;
+-		else
+-			IWL_WARN(fwrt,
+-				 "WRT: Failed to set DRAM buffer for alloc id %d, ret=%d\n",
+-				 i, ret);
+-	}
++memset(dram_info, 0, sizeof(*dram_info));
++
++for (i = IWL_FW_INI_ALLOCATION_ID_DBGC1;
++     i < IWL_FW_INI_ALLOCATION_NUM; i++) {
++if (fwrt->trans->dbg.fw_mon_cfg[i].buf_location ==
++IWL_FW_INI_LOCATION_INVALID)
++continue;
++
++ret = iwl_dbg_tlv_update_dram(fwrt, i, dram_info);
++if (!ret)
++dram_alloc = true;
++else
++IWL_INFO(fwrt,
++ "WRT: Failed to set DRAM buffer for alloc id %d, ret=%d\n",
++ i, ret);
++}
+ 
+-	if (dram_alloc)
+-		IWL_DEBUG_FW(fwrt, "block data after  %08x\n",
+-			     dram_info->first_word);
+-	else
+-		memset(frags->block, 0, sizeof(*dram_info));
++if (dram_alloc) {
++dram_info->first_word = cpu_to_le32(DRAM_INFO_FIRST_MAGIC_WORD);
++dram_info->second_word = cpu_to_le32(DRAM_INFO_SECOND_MAGIC_WORD);
++}
+ }
+ 
+ static void iwl_dbg_tlv_send_hcmds(struct iwl_fw_runtime *fwrt,
+@@ -1282,19 +1292,24 @@ static void iwl_dbg_tlv_init_cfg(struct iwl_fw_runtime *fwrt)
+ 	int ret, i;
+ 	u32 failed_alloc = 0;
+ 
+-	if (*ini_dest != IWL_FW_INI_LOCATION_INVALID)
+-		return;
+-
+-	IWL_DEBUG_FW(fwrt,
+-		     "WRT: Generating active triggers list, domain 0x%x\n",
+-		     fwrt->trans->dbg.domains_bitmap);
++if (*ini_dest == IWL_FW_INI_LOCATION_INVALID) {
++IWL_DEBUG_FW(fwrt,
++     "WRT: Generating active triggers list, domain 0x%x\n",
++     fwrt->trans->dbg.domains_bitmap);
+ 
+-	for (i = 0; i < ARRAY_SIZE(fwrt->trans->dbg.time_point); i++) {
+-		struct iwl_dbg_tlv_time_point_data *tp =
+-			&fwrt->trans->dbg.time_point[i];
++for (i = 0; i < ARRAY_SIZE(fwrt->trans->dbg.time_point); i++) {
++struct iwl_dbg_tlv_time_point_data *tp =
++&fwrt->trans->dbg.time_point[i];
+ 
+-		iwl_dbg_tlv_gen_active_trig_list(fwrt, tp);
+-	}
++iwl_dbg_tlv_gen_active_trig_list(fwrt, tp);
++}
++} else if (*ini_dest != IWL_FW_INI_LOCATION_DRAM_PATH) {
++/*
++ * For DRAM, go through the loop below to clear all the buffers
++ * properly on restart, otherwise garbage may leak into new dumps.
++ */
++return;
++}
+ 
+ 	*ini_dest = IWL_FW_INI_LOCATION_INVALID;
+ 	for (i = 0; i < IWL_FW_INI_ALLOCATION_NUM; i++) {
+@@ -1372,19 +1387,19 @@ void _iwl_dbg_tlv_time_point(struct iwl_fw_runtime *fwrt,
+ 	trig_list = &fwrt->trans->dbg.time_point[tp_id].active_trig_list;
+ 	conf_list = &fwrt->trans->dbg.time_point[tp_id].config_list;
+ 
+-	switch (tp_id) {
+-	case IWL_FW_INI_TIME_POINT_EARLY:
+-		iwl_dbg_tlv_init_cfg(fwrt);
+-		iwl_dbg_tlv_apply_config(fwrt, conf_list);
+-		iwl_dbg_tlv_update_drams(fwrt);
+-		iwl_dbg_tlv_tp_trigger(fwrt, sync, trig_list, tp_data, NULL);
+-		break;
+-	case IWL_FW_INI_TIME_POINT_AFTER_ALIVE:
+-		iwl_dbg_tlv_apply_buffers(fwrt);
+-		iwl_dbg_tlv_send_hcmds(fwrt, hcmd_list);
+-		iwl_dbg_tlv_apply_config(fwrt, conf_list);
+-		iwl_dbg_tlv_tp_trigger(fwrt, sync, trig_list, tp_data, NULL);
+-		break;
++switch (tp_id) {
++case IWL_FW_INI_TIME_POINT_EARLY:
++iwl_dbg_tlv_init_cfg(fwrt);
++iwl_dbg_tlv_update_drams(fwrt);
++iwl_dbg_tlv_tp_trigger(fwrt, sync, trig_list, tp_data, NULL);
++iwl_dbg_tlv_apply_config(fwrt, conf_list);
++break;
++case IWL_FW_INI_TIME_POINT_AFTER_ALIVE:
++iwl_dbg_tlv_apply_buffers(fwrt);
++iwl_dbg_tlv_send_hcmds(fwrt, hcmd_list);
++iwl_dbg_tlv_tp_trigger(fwrt, sync, trig_list, tp_data, NULL);
++iwl_dbg_tlv_apply_config(fwrt, conf_list);
++break;
+ 	case IWL_FW_INI_TIME_POINT_PERIODIC:
+ 		iwl_dbg_tlv_set_periodic_trigs(fwrt);
+ 		iwl_dbg_tlv_send_hcmds(fwrt, hcmd_list);
+diff --git a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/pcie/ctxt-info-gen3.c b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/pcie/ctxt-info-gen3.c
+index cb60ba4..456d686 100644
+--- a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/pcie/ctxt-info-gen3.c
++++ b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/pcie/ctxt-info-gen3.c
+@@ -7,6 +7,7 @@
+ #include "iwl-context-info-gen3.h"
+ #include "internal.h"
+ #include "iwl-prph.h"
++#include "fw/pnvm.h"
+ 
+ static void
+ iwl_pcie_ctxt_info_dbg_enable(struct iwl_trans *trans,
+@@ -128,6 +129,9 @@ int iwl_pcie_ctxt_info_gen3_init(struct iwl_trans *trans,
+ 	if (trans->trans_cfg->imr_enabled)
+ 		control_flags |= IWL_PRPH_SCRATCH_IMR_DEBUG_EN;
+ 
++	if (trans->do_top_reset)
++		control_flags |= IWL_PRPH_SCRATCH_TOP_RESET;
++
+ 	/* initialize RX default queue */
+ 	prph_sc_ctrl->rbd_cfg.free_rbd_addr =
+ 		cpu_to_le64(trans_pcie->rxq->bd_dma);
+@@ -281,37 +285,170 @@ void iwl_pcie_ctxt_info_gen3_free(struct iwl_trans *trans, bool alive)
+ 	trans_pcie->prph_info = NULL;
+ }
+ 
++struct iwl_prph_scratch_mem_desc_addr_array {
++__le64 mem_descs[IWL_PNVM_CHUNK_MAX];
++} __packed;
++
++static void iwl_pcie_free_dram_regions(struct device *dev,
++       struct iwl_dram_regions *dram_regions)
++{
++u32 i;
++
++if (dram_regions->prph_scratch_mem_desc.size)
++dma_free_coherent(dev,
++  dram_regions->prph_scratch_mem_desc.size,
++  dram_regions->prph_scratch_mem_desc.block,
++  dram_regions->prph_scratch_mem_desc.physical);
++
++for (i = 0; i < dram_regions->n_regions; i++) {
++if (!dram_regions->drams[i].size)
++continue;
++
++dma_free_coherent(dev, dram_regions->drams[i].size,
++  dram_regions->drams[i].block,
++  dram_regions->drams[i].physical);
++}
++
++memset(dram_regions, 0, sizeof(*dram_regions));
++}
++
++static int iwl_pcie_load_payloads_contig(struct iwl_trans *trans,
++ const struct iwl_pnvm_chunked_pkg *pkg,
++ struct iwl_dram_data *dram)
++{
++u32 len0, len1, len;
++
++if (le32_to_cpu(pkg->n_chunks) != 2) {
++IWL_DEBUG_FW(trans, "expected 2 payloads, got %u.\n",
++     le32_to_cpu(pkg->n_chunks));
++return -EINVAL;
++}
++
++len0 = le32_to_cpu(pkg->chunk_len[0]);
++len1 = le32_to_cpu(pkg->chunk_len[1]);
++if (len1 > U32_MAX - len0) {
++IWL_DEBUG_FW(trans, "sizes of payloads overflow.\n");
++return -EINVAL;
++}
++
++len = len0 + len1;
++
++return iwl_pcie_ctxt_info_alloc_dma(trans, pkg->data, len, dram);
++}
++
++static int iwl_pcie_load_payloads_segments(struct iwl_trans *trans,
++   struct iwl_dram_regions *dram_regions,
++   const struct iwl_pnvm_chunked_pkg *pkg)
++{
++struct iwl_prph_scratch_mem_desc_addr_array *addresses;
++struct iwl_prph_scratch_mem_desc_addr_array empty_desc = {};
++u32 n_chunks = le32_to_cpu(pkg->n_chunks);
++u32 i, offset = 0, len;
++
++len = sizeof(empty_desc);
++if (iwl_pcie_ctxt_info_alloc_dma(trans, &empty_desc, len,
++ &dram_regions->prph_scratch_mem_desc)) {
++IWL_DEBUG_FW(trans, "Failed to allocate PNVM DMA.\n");
++return -ENOMEM;
++}
++
++for (i = 0; i < n_chunks; i++) {
++len = le32_to_cpu(pkg->chunk_len[i]);
++if (iwl_pcie_ctxt_info_alloc_dma(trans, pkg->data + offset, len,
++ &dram_regions->drams[i])) {
++iwl_pcie_free_dram_regions(trans->dev, dram_regions);
++return -ENOMEM;
++}
++
++dram_regions->n_regions++;
++offset += len;
++}
++
++addresses = dram_regions->prph_scratch_mem_desc.block;
++for (i = 0; i < n_chunks; i++)
++addresses->mem_descs[i] =
++cpu_to_le64(dram_regions->drams[i].physical);
++
++return 0;
++}
++
++static size_t iwl_dram_regions_size(const struct iwl_dram_regions *dram_regions)
++{
++size_t total_size = 0;
++u32 i;
++
++for (i = 0; i < dram_regions->n_regions; i++)
++total_size += dram_regions->drams[i].size;
++
++return total_size;
++}
++
+ int iwl_trans_pcie_ctx_info_gen3_set_pnvm(struct iwl_trans *trans,
+-					  const void *data, u32 len)
++  const void *data, u32 len)
+ {
+-	struct iwl_trans_pcie *trans_pcie = IWL_TRANS_GET_PCIE_TRANS(trans);
+-	struct iwl_prph_scratch_ctrl_cfg *prph_sc_ctrl =
+-		&trans_pcie->prph_scratch->ctrl_cfg;
+-	int ret;
++struct iwl_trans_pcie *trans_pcie = IWL_TRANS_GET_PCIE_TRANS(trans);
++struct iwl_prph_scratch_ctrl_cfg *prph_sc_ctrl =
++&trans_pcie->prph_scratch->ctrl_cfg;
++const struct iwl_pnvm_chunked_pkg *pkg = data;
++struct iwl_dram_regions *dram_regions = &trans_pcie->pnvm_regions;
++bool fragmented = iwl_drv_has_fw_capa(trans->drv,
++      IWL_UCODE_TLV_CAPA_FRAGMENTED_PNVM_IMG);
++u32 payload_size = 0, n_chunks;
++int ret;
++u32 i;
+ 
+ 	if (trans->trans_cfg->device_family < IWL_DEVICE_FAMILY_AX210)
+ 		return 0;
+ 
+-	/* only allocate the DRAM if not allocated yet */
+ 	if (!trans->pnvm_loaded) {
+ 		if (WARN_ON(prph_sc_ctrl->pnvm_cfg.pnvm_size))
+ 			return -EBUSY;
+ 
+-		ret = iwl_pcie_ctxt_info_alloc_dma(trans, data, len,
+-						   &trans_pcie->pnvm_dram);
+-		if (ret < 0) {
+-			IWL_DEBUG_FW(trans, "Failed to allocate PNVM DMA %d.\n",
+-				     ret);
+-			return ret;
++		if (!pkg || len < sizeof(*pkg))
++			return -EINVAL;
++
++		n_chunks = le32_to_cpu(pkg->n_chunks);
++		if (!n_chunks || n_chunks > IWL_PNVM_CHUNK_MAX)
++			return -EINVAL;
++
++for (i = 0; i < n_chunks; i++) {
++u32 chunk_len = le32_to_cpu(pkg->chunk_len[i]);
++
++			if (chunk_len > U32_MAX - payload_size)
++				return -EINVAL;
++			payload_size += chunk_len;
+ 		}
+-	}
+ 
+-	prph_sc_ctrl->pnvm_cfg.pnvm_base_addr =
+-		cpu_to_le64(trans_pcie->pnvm_dram.physical);
+-	prph_sc_ctrl->pnvm_cfg.pnvm_size =
+-		cpu_to_le32(trans_pcie->pnvm_dram.size);
++if (len < sizeof(*pkg) + payload_size)
++return -EINVAL;
++
++if (fragmented)
++ret = iwl_pcie_load_payloads_segments(trans, dram_regions, pkg);
++else
++ret = iwl_pcie_load_payloads_contig(trans, pkg,
++    &dram_regions->drams[0]);
++if (ret < 0) {
++IWL_DEBUG_FW(trans, "Failed to allocate PNVM DMA %d.\n",
++     ret);
++return ret;
++}
+ 
+-	return 0;
++if (!fragmented)
++dram_regions->n_regions = 1;
++}
++
++if (fragmented)
++prph_sc_ctrl->pnvm_cfg.pnvm_base_addr =
++cpu_to_le64(dram_regions->prph_scratch_mem_desc.physical);
++else
++prph_sc_ctrl->pnvm_cfg.pnvm_base_addr =
++cpu_to_le64(dram_regions->drams[0].physical);
++
++prph_sc_ctrl->pnvm_cfg.pnvm_size = cpu_to_le32(fragmented ?
++       iwl_dram_regions_size(dram_regions) :
++       dram_regions->drams[0].size);
++
++return 0;
+ }
+ 
+ int iwl_trans_pcie_ctx_info_gen3_set_reduce_power(struct iwl_trans *trans,
+@@ -347,4 +484,3 @@ int iwl_trans_pcie_ctx_info_gen3_set_reduce_power(struct iwl_trans *trans,
+ 
+ 	return 0;
+ }
+-
+diff --git a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/pcie/internal.h b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/pcie/internal.h
+index b16e7ad..cbdabca 100644
+--- a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/pcie/internal.h
++++ b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/pcie/internal.h
+@@ -267,6 +267,7 @@ enum iwl_pcie_fw_reset_state {
+ 	FW_RESET_REQUESTED,
+ 	FW_RESET_OK,
+ 	FW_RESET_ERROR,
++	FW_RESET_TOP_REQUESTED,
+ };
+ 
+ /**
+@@ -306,7 +307,7 @@ enum iwl_pcie_imr_status {
+  * @trans: pointer to the generic transport area
+  * @scd_base_addr: scheduler sram base address in SRAM
+  * @kw: keep warm address
+- * @pnvm_dram: DRAM area that contains the PNVM data
++ * @pnvm_regions: DRAM areas that contain the PNVM data
+  * @pci_dev: basic pci-network driver stuff
+  * @hw_base: pci hardware address support
+  * @ucode_write_complete: indicates that the ucode has been copied.
+@@ -345,6 +346,12 @@ enum iwl_pcie_imr_status {
+  * @wait_queue_head_t: imr wait queue for dma completion
+  * @rf_name: name/version of the CRF, if any
+  */
++struct iwl_dram_regions {
++u32 n_regions;
++struct iwl_dram_data prph_scratch_mem_desc;
++struct iwl_dram_data drams[64];
++};
++
+ struct iwl_trans_pcie {
+ 	struct iwl_rxq *rxq;
+ 	struct iwl_rx_mem_buffer *rx_pool;
+@@ -380,8 +387,8 @@ struct iwl_trans_pcie {
+ 	u32 scd_base_addr;
+ 	struct iwl_dma_ptr kw;
+ 
+-	struct iwl_dram_data pnvm_dram;
+-	struct iwl_dram_data reduce_power_dram;
++struct iwl_dram_regions pnvm_regions;
++struct iwl_dram_data reduce_power_dram;
+ 
+ 	struct iwl_txq *txq_memory;
+ 
+@@ -823,6 +830,7 @@ int iwl_pcie_alloc_dma_ptr(struct iwl_trans *trans,
+ void iwl_pcie_free_dma_ptr(struct iwl_trans *trans, struct iwl_dma_ptr *ptr);
+ int iwl_trans_pcie_power_device_off(struct iwl_trans_pcie *trans_pcie);
+ void iwl_pcie_apply_destination(struct iwl_trans *trans);
++int _iwl_trans_pcie_start_hw(struct iwl_trans *trans);
+ 
+ /* common functions that are used by gen3 transport */
+ void iwl_pcie_alloc_fw_monitor(struct iwl_trans *trans, u8 max_power);
+diff --git a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/pcie/rx.c b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/pcie/rx.c
+index 38f624c..5d669a4 100644
+--- a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/pcie/rx.c
++++ b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/pcie/rx.c
+@@ -1687,6 +1687,15 @@ static void iwl_pcie_irq_handle_error(struct iwl_trans *trans)
+ 		del_timer(&trans->txqs.txq[i]->stuck_timer);
+ 	}
+ 
++	if (trans->trans_cfg->device_family >= IWL_DEVICE_FAMILY_BZ) {
++		u32 val = iwl_read32(trans, CSR_IPC_STATE);
++
++		if (val & CSR_IPC_STATE_TOP_RESET_REQ) {
++			IWL_ERR(trans, "FW requested TOP reset for FSEQ\n");
++			trans->do_top_reset = 1;
++		}
++	}
++
+ 	/* The STATUS_FW_ERROR bit is set in this function. This must happen
+ 	 * before we wake up the command caller, to ensure a proper cleanup. */
+ 	iwl_trans_fw_error(trans, false);
+@@ -2368,9 +2377,26 @@ irqreturn_t iwl_pcie_irq_msix_handler(int irq, void *dev_id)
+ 	}
+ 
+ 	if (inta_hw & MSIX_HW_INT_CAUSES_REG_RESET_DONE) {
+-		IWL_DEBUG_ISR(trans, "Reset flow completed\n");
+-		trans_pcie->fw_reset_state = FW_RESET_OK;
+-		wake_up(&trans_pcie->fw_reset_waitq);
++		u32 state = CSR_IPC_STATE_RESET_SW_READY;
++
++		if (trans->trans_cfg->device_family >= IWL_DEVICE_FAMILY_BZ) {
++			u32 val = iwl_read32(trans, CSR_IPC_STATE);
++
++			state = u32_get_bits(val, CSR_IPC_STATE_RESET);
++			IWL_DEBUG_ISR(trans, "IPC state = 0x%x/%d\n", val, state);
++		}
++
++		if (state == CSR_IPC_STATE_RESET_SW_READY &&
++		    trans_pcie->fw_reset_state == FW_RESET_REQUESTED) {
++			IWL_DEBUG_ISR(trans, "Reset flow completed\n");
++			trans_pcie->fw_reset_state = FW_RESET_OK;
++			wake_up(&trans_pcie->fw_reset_waitq);
++		} else if (state == CSR_IPC_STATE_RESET_TOP_READY &&
++			   trans_pcie->fw_reset_state == FW_RESET_TOP_REQUESTED) {
++			IWL_DEBUG_ISR(trans, "TOP Reset continues\n");
++			trans_pcie->fw_reset_state = FW_RESET_OK;
++			wake_up(&trans_pcie->fw_reset_waitq);
++		}
+ 	}
+ 
+ 	if (!polling)
+diff --git a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/pcie/trans-gen2.c b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/pcie/trans-gen2.c
+index 4b8c6f5..79bceab 100644
+--- a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/pcie/trans-gen2.c
++++ b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/pcie/trans-gen2.c
+@@ -471,6 +471,7 @@ int iwl_trans_pcie_gen2_start_fw(struct iwl_trans *trans,
+ 	iwl_pcie_synchronize_irqs(trans);
+ 
+ 	mutex_lock(&trans_pcie->mutex);
++again:
+ 
+ 	/* If platform's RF_KILL switch is NOT set to KILL */
+ 	hw_rfkill = iwl_pcie_check_hw_rf_kill(trans);
+@@ -501,6 +502,15 @@ int iwl_trans_pcie_gen2_start_fw(struct iwl_trans *trans,
+ 		goto out;
+ 	}
+ 
++	if (trans->do_top_reset &&
++	    trans->trans_cfg->device_family < IWL_DEVICE_FAMILY_BZ) {
++		ret = -EINVAL;
++		goto out;
++	}
++
++	if (trans->do_top_reset)
++		trans_pcie->fw_reset_state = FW_RESET_TOP_REQUESTED;
++
+ 	if (trans->trans_cfg->device_family >= IWL_DEVICE_FAMILY_AX210)
+ 		ret = iwl_pcie_ctxt_info_gen3_init(trans, fw);
+ 	else
+@@ -523,6 +533,39 @@ int iwl_trans_pcie_gen2_start_fw(struct iwl_trans *trans,
+ 	if (keep_ram_busy)
+ 		iwl_pcie_spin_for_iml(trans);
+ 
++	if (trans->do_top_reset) {
++		ret = wait_event_timeout(trans_pcie->fw_reset_waitq,
++					 trans_pcie->fw_reset_state != FW_RESET_TOP_REQUESTED,
++					 HZ / 4);
++
++		if (!ret || trans_pcie->fw_reset_state != FW_RESET_OK) {
++			if (!ret)
++				IWL_ERR(trans, "TOP reset timed out!\n");
++			else
++				IWL_ERR(trans,
++					"TOP reset interrupted by error (state %d)!\n",
++					trans_pcie->fw_reset_state);
++			ret = -EIO;
++			goto out;
++		}
++
++		trans->do_top_reset = 0;
++		trans_pcie->fw_reset_state = FW_RESET_IDLE;
++		msleep(10);
++		IWL_INFO(trans, "TOP reset successful, reinit now\n");
++
++		if (trans->trans_cfg->device_family >= IWL_DEVICE_FAMILY_AX210)
++			iwl_pcie_ctxt_info_gen3_free(trans, false);
++
++		ret = _iwl_trans_pcie_start_hw(trans);
++		if (ret) {
++			IWL_ERR(trans, "failed to start HW after TOP reset\n");
++			goto out;
++		}
++
++		goto again;
++	}
++
+ 	/* re-check RF-Kill state since we may have missed the interrupt */
+ 	hw_rfkill = iwl_pcie_check_hw_rf_kill(trans);
+ 	if (hw_rfkill && !run_in_rfkill)
+diff --git a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/pcie/trans.c b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/pcie/trans.c
+index e4868aa..1cac2eb 100644
+--- a/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/pcie/trans.c
++++ b/iwlwifi-stack-dev/drivers/net/wireless/intel/iwlwifi/pcie/trans.c
+@@ -1873,7 +1873,7 @@ static int iwl_pcie_gen2_force_power_gating(struct iwl_trans *trans)
+ 	return iwl_trans_pcie_sw_reset(trans, true);
+ }
+ 
+-static int _iwl_trans_pcie_start_hw(struct iwl_trans *trans)
++int _iwl_trans_pcie_start_hw(struct iwl_trans *trans)
+ {
+ 	struct iwl_trans_pcie *trans_pcie = IWL_TRANS_GET_PCIE_TRANS(trans);
+ 	int err;
+@@ -2076,10 +2076,21 @@ void iwl_trans_pcie_free(struct iwl_trans *trans)
+ 
+ 	iwl_pcie_free_fw_monitor(trans);
+ 
+-	if (trans_pcie->pnvm_dram.size)
+-		dma_free_coherent(trans->dev, trans_pcie->pnvm_dram.size,
+-				  trans_pcie->pnvm_dram.block,
+-				  trans_pcie->pnvm_dram.physical);
++if (trans_pcie->pnvm_regions.prph_scratch_mem_desc.size)
++dma_free_coherent(trans->dev,
++  trans_pcie->pnvm_regions.prph_scratch_mem_desc.size,
++  trans_pcie->pnvm_regions.prph_scratch_mem_desc.block,
++  trans_pcie->pnvm_regions.prph_scratch_mem_desc.physical);
++
++for (i = 0; i < trans_pcie->pnvm_regions.n_regions; i++) {
++if (!trans_pcie->pnvm_regions.drams[i].size)
++continue;
++
++dma_free_coherent(trans->dev,
++  trans_pcie->pnvm_regions.drams[i].size,
++  trans_pcie->pnvm_regions.drams[i].block,
++  trans_pcie->pnvm_regions.drams[i].physical);
++}
+ 
+ 	if (trans_pcie->reduce_power_dram.size)
+ 		dma_free_coherent(trans->dev,
